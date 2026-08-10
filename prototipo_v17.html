@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prototipo v6 - Pradera Serena</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; background: #cdeefc; color: #2c3b2e;
+    font-family: -apple-system, sans-serif; display: flex; flex-direction: column;
+    align-items: center; overflow-x: hidden;
+  }
+  #titulo { margin: 14px 0 4px; font-size: 20px; letter-spacing: 1px; }
+  #instrucciones { margin: 0 0 12px; font-size: 14px; color: #4a5d4c; text-align: center; max-width: 760px; padding: 0 12px; }
+  #game-wrap { position: relative; border-radius: 10px; overflow: hidden; box-shadow: 0 0 24px rgba(80,130,90,0.3); }
+  canvas { display: block; }
+  .overlay {
+    position: absolute; inset: 0; background: rgba(20,30,20,0.9);
+    display: none; align-items: center; justify-content: center; flex-direction: column;
+  }
+  .overlay h2 { color: #8fe08a; margin: 0 0 4px; }
+  .overlay p { color: #cfe8cf; margin: 0 0 16px; font-size: 14px; }
+  .item-tienda {
+    background: #2a3f2a; border: 1px solid #8fe08a; border-radius: 8px;
+    padding: 10px 18px; margin: 6px 0; width: 260px; display: flex;
+    justify-content: space-between; align-items: center; cursor: pointer; color: #e8f5e8;
+  }
+  .item-tienda:hover { background: #3a523a; }
+  .item-tienda.deshabilitado { opacity: 0.4; cursor: not-allowed; }
+  .cerrar-overlay {
+    margin-top: 14px; background: transparent; border: 1px solid #cfe8cf; color: #cfe8cf;
+    padding: 6px 16px; border-radius: 6px; cursor: pointer;
+  }
+
+  #game-wrap { max-width: 100%; }
+  #game-container canvas { max-width: 100%; height: auto; }
+
+  #controles-tactiles {
+    position: absolute; inset: 0; display: none; pointer-events: none; z-index: 5;
+  }
+  #joystick-base {
+    position: absolute; left: 24px; bottom: 24px; width: 110px; height: 110px;
+    border-radius: 50%; background: rgba(255,255,255,0.18); border: 2px solid rgba(255,255,255,0.4);
+    pointer-events: auto; touch-action: none;
+  }
+  #joystick-nudo {
+    position: absolute; left: 30px; top: 30px; width: 50px; height: 50px; border-radius: 50%;
+    background: rgba(255,255,255,0.55); border: 2px solid rgba(255,255,255,0.7);
+  }
+  .btn-tactil {
+    position: absolute; border-radius: 50%; background: rgba(255,255,255,0.25);
+    border: 2px solid rgba(255,255,255,0.5); color: #fff; font-size: 12px; font-weight: 600;
+    display: flex; align-items: center; justify-content: center; pointer-events: auto; touch-action: none;
+    user-select: none;
+  }
+  #btn-saltar { right: 30px; bottom: 90px; width: 72px; height: 72px; font-size: 13px; }
+  #btn-disparar { right: 120px; bottom: 34px; width: 72px; height: 72px; font-size: 13px; }
+  #btn-agachar { right: 30px; bottom: 20px; width: 46px; height: 46px; font-size: 11px; }
+  #btn-menu { right: 16px; top: 16px; width: 42px; height: 42px; font-size: 18px; }
+  .btn-arma { width: 38px; height: 38px; font-size: 13px; top: 16px; }
+  #btn-arma1 { left: 16px; }
+  #btn-arma2 { left: 62px; }
+  #btn-arma3 { left: 108px; }
+</style>
+</head>
+<body>
+<div id="titulo">Mundo 1 &mdash; Pradera Serena (prototipo v6)</div>
+<div id="instrucciones">
+  Flechas o A/D: moverte &nbsp;|&nbsp; Arriba/W: saltar &nbsp;|&nbsp; Abajo/S: agacharte &nbsp;|&nbsp;
+  Espacio: disparar (arriba + espacio: hacia arriba) &nbsp;|&nbsp; 1/2/3: cambiar de arma &nbsp;|&nbsp; M: menu/tienda
+</div>
+<div id="game-wrap">
+  <div id="game-container"></div>
+
+  <div class="overlay" id="menu-mapa">
+    <h2>Menu</h2>
+    <p>Version temprana &mdash; el mapa de mundos llegara mas adelante</p>
+    <div class="item-tienda" id="abrir-tienda-desde-menu"><span>Tienda</span><span>&gt;</span></div>
+    <button class="cerrar-overlay" id="cerrar-menu">Cerrar</button>
+  </div>
+
+  <div class="overlay" id="tienda">
+    <h2>Tienda</h2>
+    <p id="monedas-tienda">Monedas: 0</p>
+    <div class="item-tienda" id="item-corazon"><span>Corazon extra (8 monedas)</span><span>+1</span></div>
+    <div class="item-tienda" id="item-especial"><span>Recargar arma especial (5 monedas)</span><span>+2</span></div>
+    <button class="cerrar-overlay" id="cerrar-tienda">Cerrar</button>
+  </div>
+
+  <div class="overlay" id="completado">
+    <h2>Nivel completado</h2>
+    <p id="puntuacion-final"></p>
+    <button class="cerrar-overlay" id="reiniciar">Volver a jugar</button>
+  </div>
+
+  <div class="overlay" id="fin-partida">
+    <h2>Fin de la partida</h2>
+    <p id="puntuacion-fin"></p>
+    <button class="cerrar-overlay" id="reiniciar-nivel">Reiniciar nivel</button>
+    <button class="cerrar-overlay" id="salir-mapa">Salir al mapa</button>
+  </div>
+
+  <div id="controles-tactiles">
+    <div id="joystick-base"><div id="joystick-nudo"></div></div>
+    <div class="btn-tactil" id="btn-saltar">SALTAR</div>
+    <div class="btn-tactil" id="btn-disparar">DISPARO</div>
+    <div class="btn-tactil" id="btn-agachar">AGACH</div>
+    <div class="btn-tactil" id="btn-menu">M</div>
+    <div class="btn-tactil btn-arma" id="btn-arma1">1</div>
+    <div class="btn-tactil btn-arma" id="btn-arma2">2</div>
+    <div class="btn-tactil btn-arma" id="btn-arma3">3</div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.70.0/phaser.min.js"></script>
+<script>
+
+const WORLD_W = 2200, WORLD_H = 960;
+const Y_MUERTE_POR_CAIDA = 920;
+const VIEW_W = 800, VIEW_H = 450;
+
+const COSMETICOS = { colorCuerpo: 0x4fb8e0, colorGuantes: 0xf4ead8, colorZapatillas: 0xffd76a, colorMejillas: 0xff9a9a };
+
+const PALETA = {
+  tierra: 0x8a5a3c, hierba: 0x6bbf59, hierbaOscura: 0x529147,
+  cielo: 0x8fd3f4, sol: 0xffe066, nube: 0xffffff,
+  colinaLejos: 0x9fe08f, colinaCerca: 0x7fcf6a, arbusto: 0x3f7a38,
+  gargola: 0x4a1f66, gargolaOjo: 0xff2a2a, gargolaCuerno: 0x2a0f3d,
+  espectro: 0x261a4a, espectroOjo: 0x00fff0,
+  artillero: 0x5a2418, artilleroOjo: 0xffae2a, artilleroPlaca: 0x2e120c,
+  proyectilBase: 0xffd76a, proyectilMejora: 0x00e5c7, proyectilEspecial: 0xff7a3f,
+  proyectilEnemigo: 0xff5a5a,
+  moneda: 0xffd76a, pickup: 0x00e5c7
+};
+
+const ARMAS = {
+  principal: { nombre: 'Ballesta', textura: 'proyectil_base', dano: 1, cadencia: 420, velocidad: 480 },
+  secundaria: { nombre: 'Rayo arcano', textura: 'proyectil_mejora', dano: 2, cadencia: 300, velocidad: 520 },
+  especial: { nombre: 'Bola de fuego', textura: 'proyectil_especial', dano: 3, cadencia: 700, velocidad: 380 }
+};
+
+let jugador, gruposEnemigos, plataformas, proyectiles, proyectilesEnemigos, monedasGrupo, pickupArma, portalFinal;
+let cursores, teclas = {};
+let mirandoDerecha = true;
+let agachado = false;
+let finAnimDisparo = 0;
+let poseActual = 'idle';
+let secundariaDesbloqueada = false;
+let cargasEspecial = 2;
+const cargasEspecialMax = 4;
+let armaActual = 'principal';
+let ultimoDisparo = 0;
+let puntuacion = 0, monedas = 0;
+let corazonesMax = 3, corazonesActuales = 3;
+let invulnerable = false;
+let juegoTerminado = false;
+let nivelCompletado = false;
+let tiendaAbierta = false;
+let menuAbierto = false;
+let origenMenu = 'juego';
+let textoPuntuacion, textoMonedas, textoArma, iconosCorazon = [];
+let escenaActiva;
+
+const tactil = { izquierda: false, derecha: false, abajo: false, arriba: false, dispararPulsado: false };
+
+const config = {
+  type: Phaser.AUTO,
+  width: VIEW_W,
+  height: VIEW_H,
+  parent: 'game-container',
+  backgroundColor: '#8fd3f4',
+  physics: { default: 'arcade', arcade: { gravity: { y: 900 }, debug: false } },
+  scene: { preload, create, update }
+};
+
+new Phaser.Game(config);
+
+function preload() {
+  const g = this.add.graphics();
+  const forma = (dibujar, w, h, key) => { g.clear(); dibujar(); g.generateTexture(key, w, h); };
+
+  const cara = (cx, cy, r) => {
+    g.fillCircle(cx, cy, r);
+    g.fillStyle(COSMETICOS.colorMejillas, 1);
+    g.fillCircle(cx - 11, cy + 4, 4); g.fillCircle(cx + 11, cy + 4, 4);
+    g.fillStyle(0xffffff, 1);
+    g.fillCircle(cx - 6, cy - 3, 7); g.fillCircle(cx + 6, cy - 3, 7);
+    g.fillStyle(0x1b1230, 1);
+    g.fillCircle(cx - 5, cy - 2, 3.4); g.fillCircle(cx + 7, cy - 2, 3.4);
+    g.lineStyle(2.5, 0x1b1230, 1);
+    g.beginPath(); g.arc(cx, cy + 4, 6, 0.2, Math.PI - 0.2, false); g.strokePath();
+  };
+
+  forma(() => {
+    g.fillStyle(COSMETICOS.colorCuerpo, 1); g.fillRoundedRect(4, 26, 26, 26, 10); cara(17, 20, 19);
+    g.fillStyle(COSMETICOS.colorGuantes, 1); g.fillCircle(4, 40, 7); g.fillCircle(30, 40, 7);
+    g.fillStyle(COSMETICOS.colorZapatillas, 1); g.fillRoundedRect(2, 48, 14, 8, 3); g.fillRoundedRect(18, 48, 14, 8, 3);
+  }, 34, 58, 'jugador_idle');
+
+  forma(() => {
+    g.fillStyle(COSMETICOS.colorCuerpo, 1); g.fillRoundedRect(6, 26, 26, 26, 10); cara(19, 20, 19);
+    g.fillStyle(COSMETICOS.colorGuantes, 1); g.fillCircle(4, 36, 7); g.fillCircle(32, 44, 7);
+    g.fillStyle(COSMETICOS.colorZapatillas, 1); g.fillRoundedRect(0, 46, 14, 8, 3); g.fillRoundedRect(20, 50, 14, 8, 3);
+  }, 34, 58, 'jugador_correr1');
+
+  forma(() => {
+    g.fillStyle(COSMETICOS.colorCuerpo, 1); g.fillRoundedRect(4, 26, 26, 26, 10); cara(17, 20, 19);
+    g.fillStyle(COSMETICOS.colorGuantes, 1); g.fillCircle(2, 44, 7); g.fillCircle(30, 36, 7);
+    g.fillStyle(COSMETICOS.colorZapatillas, 1); g.fillRoundedRect(2, 50, 14, 8, 3); g.fillRoundedRect(22, 46, 14, 8, 3);
+  }, 36, 58, 'jugador_correr2');
+
+  forma(() => {
+    g.fillStyle(COSMETICOS.colorCuerpo, 1); g.fillRoundedRect(4, 26, 26, 24, 10); cara(17, 20, 19);
+    g.fillStyle(COSMETICOS.colorGuantes, 1); g.fillCircle(2, 26, 7); g.fillCircle(32, 26, 7);
+    g.fillStyle(COSMETICOS.colorZapatillas, 1); g.fillRoundedRect(8, 46, 20, 8, 3);
+  }, 34, 58, 'jugador_salto');
+
+  forma(() => {
+    g.fillStyle(COSMETICOS.colorCuerpo, 1); g.fillRoundedRect(4, 26, 26, 26, 10); cara(17, 20, 19);
+    g.fillStyle(COSMETICOS.colorGuantes, 1); g.fillCircle(4, 40, 7); g.fillCircle(40, 34, 7);
+    g.fillStyle(PALETA.proyectilBase, 1); g.fillCircle(48, 34, 4);
+    g.fillStyle(COSMETICOS.colorZapatillas, 1); g.fillRoundedRect(2, 48, 14, 8, 3); g.fillRoundedRect(18, 48, 14, 8, 3);
+  }, 54, 58, 'jugador_disparo');
+
+  forma(() => {
+    g.fillStyle(COSMETICOS.colorCuerpo, 1); g.fillRoundedRect(4, 40, 26, 16, 8);
+    g.fillCircle(17, 34, 15);
+    g.fillStyle(COSMETICOS.colorMejillas, 1); g.fillCircle(8, 37, 3); g.fillCircle(26, 37, 3);
+    g.fillStyle(0xffffff, 1); g.fillCircle(12, 31, 5.5); g.fillCircle(22, 31, 5.5);
+    g.fillStyle(0x1b1230, 1); g.fillCircle(13, 32, 2.6); g.fillCircle(23, 32, 2.6);
+    g.lineStyle(2, 0x1b1230, 1); g.beginPath(); g.arc(17, 36, 5, 0.2, Math.PI - 0.2, false); g.strokePath();
+    g.fillStyle(COSMETICOS.colorGuantes, 1); g.fillCircle(2, 48, 6); g.fillCircle(32, 48, 6);
+    g.fillStyle(COSMETICOS.colorZapatillas, 1); g.fillRoundedRect(2, 52, 14, 6, 3); g.fillRoundedRect(18, 52, 14, 6, 3);
+  }, 34, 58, 'jugador_agachado');
+
+  forma(() => {
+    g.fillStyle(PALETA.gargolaCuerno, 1);
+    g.fillTriangle(4, 8, 10, -6, 14, 8); g.fillTriangle(26, 8, 30, -6, 36, 8);
+    g.fillStyle(PALETA.gargola, 1); g.fillRoundedRect(0, 4, 40, 34, 8);
+    g.fillStyle(0xff8a8a, 1); g.fillCircle(11, 18, 6); g.fillCircle(29, 18, 6);
+    g.fillStyle(PALETA.gargolaOjo, 1); g.fillCircle(11, 18, 3); g.fillCircle(29, 18, 3);
+    g.fillStyle(0xffffff, 1); g.fillTriangle(10, 28, 14, 28, 12, 34); g.fillTriangle(26, 28, 30, 28, 28, 34);
+  }, 40, 38, 'gargola');
+
+  forma(() => {
+    g.fillStyle(PALETA.espectro, 1);
+    g.fillTriangle(0, 18, 10, 4, 10, 32); g.fillTriangle(40, 18, 30, 4, 30, 32);
+    g.fillEllipse(20, 18, 26, 26);
+    g.fillStyle(0x88fff5, 1); g.fillCircle(14, 16, 5); g.fillCircle(26, 16, 5);
+    g.fillStyle(PALETA.espectroOjo, 1); g.fillCircle(14, 16, 2.6); g.fillCircle(26, 16, 2.6);
+  }, 40, 34, 'espectro');
+
+  forma(() => {
+    g.fillStyle(PALETA.artillero, 1); g.fillRoundedRect(2, 2, 38, 38, 6);
+    g.fillStyle(PALETA.artilleroPlaca, 1);
+    g.fillRect(2, 12, 38, 4); g.fillRect(2, 26, 38, 4);
+    g.fillTriangle(6, 2, 12, -8, 18, 2); g.fillTriangle(24, 2, 30, -8, 36, 2);
+    g.fillStyle(0xffd28a, 1); g.fillCircle(21, 21, 8);
+    g.fillStyle(PALETA.artilleroOjo, 1); g.fillCircle(21, 21, 4.5);
+  }, 42, 42, 'artillero');
+
+  forma(() => {
+    g.fillStyle(PALETA.tierra, 1); g.fillRoundedRect(0, 6, 96, 22, 4);
+    g.fillStyle(PALETA.hierba, 1); g.fillRect(0, 0, 96, 12);
+    g.fillStyle(PALETA.hierbaOscura, 1);
+    for (let x = 6; x < 96; x += 16) g.fillTriangle(x, 8, x + 4, 0, x + 8, 8);
+  }, 96, 28, 'plataforma');
+
+  // suelo grueso: mismo aspecto por arriba pero con cuerpo solido hasta el fondo (sin fondo falso)
+  forma(() => {
+    g.fillStyle(PALETA.tierra, 1); g.fillRect(0, 0, 96, 140);
+    g.fillStyle(PALETA.hierba, 1); g.fillRect(0, 0, 96, 12);
+    g.fillStyle(PALETA.hierbaOscura, 1);
+    for (let x = 6; x < 96; x += 16) g.fillTriangle(x, 8, x + 4, 0, x + 8, 8);
+  }, 96, 140, 'suelo');
+
+  forma(() => { g.fillStyle(PALETA.proyectilBase, 1); g.fillCircle(6, 6, 6); }, 12, 12, 'proyectil_base');
+  forma(() => { g.fillStyle(PALETA.proyectilMejora, 1); g.fillCircle(8, 8, 8); }, 16, 16, 'proyectil_mejora');
+  forma(() => { g.fillStyle(PALETA.proyectilEspecial, 1); g.fillCircle(10, 10, 10); }, 20, 20, 'proyectil_especial');
+  forma(() => { g.fillStyle(PALETA.proyectilEnemigo, 1); g.fillCircle(7, 7, 7); }, 14, 14, 'proyectil_enemigo');
+
+  forma(() => {
+    g.fillStyle(PALETA.moneda, 1); g.fillCircle(9, 9, 9);
+    g.lineStyle(2, 0x8a6a1f, 1); g.strokeCircle(9, 9, 9);
+  }, 18, 18, 'moneda');
+
+  forma(() => {
+    g.fillStyle(PALETA.pickup, 1); g.fillCircle(12, 12, 12);
+    g.lineStyle(2, 0xffffff, 0.6); g.strokeCircle(12, 12, 12);
+  }, 24, 24, 'pickup');
+
+  const corazon = (relleno) => {
+    g.clear();
+    g.fillStyle(relleno ? 0xff5a5a : 0xcccccc, 1);
+    g.fillCircle(6, 7, 6); g.fillCircle(14, 7, 6);
+    g.fillTriangle(1, 9, 19, 9, 10, 20);
+  };
+  corazon(true); g.generateTexture('corazon_lleno', 20, 20);
+  corazon(false); g.generateTexture('corazon_vacio', 20, 20);
+
+  forma(() => {
+    g.fillStyle(0xffd76a, 1); g.fillCircle(30, 30, 30);
+    g.fillStyle(0xfff6d8, 1); g.fillCircle(30, 30, 20);
+    g.lineStyle(3, 0xffd76a, 1); g.strokeCircle(30, 30, 26);
+  }, 60, 60, 'portal');
+
+  g.destroy();
+}
+
+function create() {
+  escenaActiva = this;
+  this.physics.world.setBounds(0, 0, WORLD_W, WORLD_H);
+
+  const fondo = this.add.graphics();
+  fondo.fillStyle(PALETA.sol, 1); fondo.fillCircle(2080, 100, 50);
+  fondo.fillStyle(0xfff3b0, 0.6); fondo.fillCircle(2080, 100, 66);
+  fondo.fillStyle(PALETA.nube, 0.9);
+  [[200, 90], [420, 130], [900, 80], [1300, 120], [1750, 90]].forEach(([x, y]) => {
+    fondo.fillEllipse(x, y, 70, 26); fondo.fillEllipse(x + 34, y - 10, 46, 22); fondo.fillEllipse(x - 30, y + 4, 46, 20);
+  });
+  fondo.fillStyle(PALETA.colinaLejos, 1);
+  for (let x = 0; x < WORLD_W; x += 400) fondo.fillEllipse(x + 150, 760, 320, 140);
+  fondo.fillStyle(PALETA.colinaCerca, 1);
+  for (let x = 0; x < WORLD_W; x += 300) fondo.fillEllipse(x, 800, 260, 110);
+  fondo.fillStyle(PALETA.arbusto, 1);
+  for (let x = 30; x < WORLD_W; x += 180) {
+    if ((x > 660 && x < 840) || (x > 1360 && x < 1540)) continue;
+    fondo.fillCircle(x, 826, 16); fondo.fillCircle(x + 16, 830, 13); fondo.fillCircle(x - 14, 830, 12);
+  }
+  plataformas = this.physics.add.staticGroup();
+  const crearSuelo = (xIni, xFin) => { for (let x = xIni; x + 96 <= xFin; x += 96) plataformas.create(x + 48, 916, 'suelo'); };
+  crearSuelo(0, 700);
+  crearSuelo(800, 1400);
+  crearSuelo(1500, 2200);
+  [[180, 700], [420, 620], [640, 700], [1650, 700], [1850, 620], [2050, 700]].forEach(([x, y]) => plataformas.create(x, y, 'plataforma'));
+  [[880, 820], [950, 760], [1050, 660], [950, 560], [1050, 460], [950, 360], [1050, 260]].forEach(([x, y]) => plataformas.create(x, y, 'plataforma'));
+
+  jugador = this.physics.add.sprite(60, 700, 'jugador_idle');
+  jugador.setBounce(0.05);
+  jugador.setCollideWorldBounds(true);
+  jugador.body.setSize(30, 40).setOffset(2, 18);
+  this.physics.add.collider(jugador, plataformas);
+
+  this.cameras.main.setBounds(0, 0, WORLD_W, WORLD_H);
+  this.cameras.main.startFollow(jugador, true, 0.08, 0.08);
+
+  gruposEnemigos = this.physics.add.group();
+  crearEnemigo(this, 'gargola', 320, 780, { limIzq: 260, limDer: 650 });
+  crearEnemigo(this, 'gargola', 1750, 780, { limIzq: 1550, limDer: 2100 });
+  crearEnemigo(this, 'espectro', 1000, 500, { baseY: 500, amplitud: 60 });
+  crearEnemigo(this, 'artillero', 1150, 822, { limIzq: 1090, limDer: 1210 });
+  this.physics.add.collider(gruposEnemigos, plataformas);
+
+  pickupArma = this.physics.add.sprite(420, 570, 'pickup');
+  pickupArma.body.allowGravity = false;
+  this.tweens.add({ targets: pickupArma, y: pickupArma.y - 10, duration: 700, yoyo: true, repeat: -1 });
+
+  portalFinal = this.physics.add.staticSprite(2140, 800, 'portal');
+  this.tweens.add({ targets: portalFinal, scale: 1.08, duration: 600, yoyo: true, repeat: -1 });
+
+  proyectiles = this.physics.add.group();
+  proyectilesEnemigos = this.physics.add.group();
+  monedasGrupo = this.physics.add.group();
+  this.physics.add.collider(monedasGrupo, plataformas);
+
+  this.physics.add.overlap(jugador, gruposEnemigos, colisionEnemigo, null, this);
+  this.physics.add.overlap(proyectiles, gruposEnemigos, golpearEnemigo, null, this);
+  this.physics.add.overlap(jugador, proyectilesEnemigos, golpeadoPorProyectil, null, this);
+  this.physics.add.overlap(jugador, pickupArma, recogerMejora, null, this);
+  this.physics.add.overlap(jugador, monedasGrupo, recogerMoneda, null, this);
+  this.physics.add.overlap(jugador, portalFinal, completarNivel, null, this);
+
+  cursores = this.input.keyboard.createCursorKeys();
+  ['SPACE', 'W', 'A', 'D', 'S', 'M', 'ONE', 'TWO', 'THREE'].forEach((k) => {
+    teclas[k] = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes[k]);
+  });
+
+  textoPuntuacion = this.add.text(16, 12, 'Puntos: 0', { fontSize: '16px', color: '#2c3b2e' }).setScrollFactor(0);
+  textoMonedas = this.add.text(16, 34, 'Monedas: 0', { fontSize: '16px', color: '#8a6a1f' }).setScrollFactor(0);
+  textoArma = this.add.text(16, 56, '', { fontSize: '14px', color: '#2c6b3a' }).setScrollFactor(0);
+  actualizarTextoArma();
+
+  for (let i = 0; i < corazonesMax; i++) {
+    iconosCorazon.push(this.add.image(760 - i * 24, 20, 'corazon_lleno').setScrollFactor(0));
+  }
+
+  document.getElementById('abrir-tienda-desde-menu').onclick = abrirTiendaDesdeMenu;
+  document.getElementById('cerrar-menu').onclick = cerrarMenu;
+  document.getElementById('item-corazon').onclick = comprarCorazon;
+  document.getElementById('item-especial').onclick = comprarCarga;
+  document.getElementById('cerrar-tienda').onclick = cerrarTienda;
+  document.getElementById('reiniciar').onclick = () => location.reload();
+  document.getElementById('reiniciar-nivel').onclick = () => location.reload();
+  document.getElementById('salir-mapa').onclick = () => {
+    origenMenu = 'finPartida';
+    document.getElementById('fin-partida').style.display = 'none';
+    document.getElementById('menu-mapa').style.display = 'flex';
+    menuAbierto = true;
+    escenaActiva.scene.pause();
+  };
+
+  configurarControlesTactiles();
+}
+
+function configurarControlesTactiles() {
+  const esTactil = ('ontouchstart' in window) || navigator.maxTouchPoints > 0 || window.matchMedia('(pointer: coarse)').matches;
+  if (!esTactil) return;
+  document.getElementById('controles-tactiles').style.display = 'block';
+
+  const base = document.getElementById('joystick-base');
+  const nudo = document.getElementById('joystick-nudo');
+  const radio = 40;
+  let joystickId = null;
+
+  const moverNudo = (dx, dy) => {
+    const dist = Math.min(radio, Math.hypot(dx, dy));
+    const ang = Math.atan2(dy, dx);
+    nudo.style.left = (30 + Math.cos(ang) * dist) + 'px';
+    nudo.style.top = (30 + Math.sin(ang) * dist) + 'px';
+  };
+  const restablecerNudo = () => { nudo.style.left = '30px'; nudo.style.top = '30px'; };
+
+  const actualizarDireccion = (dx, dy) => {
+    tactil.izquierda = dx < -14;
+    tactil.derecha = dx > 14;
+    tactil.abajo = dy > 20;
+  };
+
+  base.addEventListener('pointerdown', (e) => {
+    joystickId = e.pointerId;
+    base.setPointerCapture(joystickId);
+  });
+  base.addEventListener('pointermove', (e) => {
+    if (e.pointerId !== joystickId) return;
+    const rect = base.getBoundingClientRect();
+    const dx = e.clientX - (rect.left + rect.width / 2);
+    const dy = e.clientY - (rect.top + rect.height / 2);
+    moverNudo(dx, dy);
+    actualizarDireccion(dx, dy);
+  });
+  const soltarJoystick = (e) => {
+    if (e.pointerId !== joystickId) return;
+    joystickId = null;
+    restablecerNudo();
+    tactil.izquierda = false; tactil.derecha = false; tactil.abajo = false;
+  };
+  base.addEventListener('pointerup', soltarJoystick);
+  base.addEventListener('pointercancel', soltarJoystick);
+
+  const botonMomentaneo = (id, propiedad) => {
+    const el = document.getElementById(id);
+    el.addEventListener('pointerdown', (e) => { e.preventDefault(); tactil[propiedad] = true; });
+    el.addEventListener('pointerup', () => { tactil[propiedad] = false; });
+    el.addEventListener('pointercancel', () => { tactil[propiedad] = false; });
+    el.addEventListener('pointerleave', () => { tactil[propiedad] = false; });
+  };
+  botonMomentaneo('btn-saltar', 'arriba');
+  botonMomentaneo('btn-agachar', 'abajo');
+
+  document.getElementById('btn-disparar').addEventListener('pointerdown', (e) => { e.preventDefault(); tactil.dispararPulsado = true; });
+  document.getElementById('btn-arma1').addEventListener('pointerdown', () => cambiarArma('principal'));
+  document.getElementById('btn-arma2').addEventListener('pointerdown', () => cambiarArma('secundaria'));
+  document.getElementById('btn-arma3').addEventListener('pointerdown', () => cambiarArma('especial'));
+  document.getElementById('btn-menu').addEventListener('pointerdown', () => {
+    if (!juegoTerminado && !nivelCompletado && !tiendaAbierta && !menuAbierto) abrirMenu();
+  });
+}
+
+function crearEnemigo(escena, tipo, x, y, extra) {
+  const e = gruposEnemigos.create(x, y, tipo);
+  e.tipo = tipo;
+  Object.assign(e, extra);
+  if (tipo === 'gargola') {
+    e.hp = 1; e.dano = 1; e.monedasDrop = 1;
+    e.setCollideWorldBounds(true);
+    e.setVelocityX(60);
+  } else if (tipo === 'espectro') {
+    e.hp = 2; e.dano = 1; e.monedasDrop = 2;
+    e.body.allowGravity = false;
+    e.origenT = Math.random() * 1000;
+  } else if (tipo === 'artillero') {
+    e.hp = 2; e.dano = 1; e.monedasDrop = 2;
+    e.body.allowGravity = false;
+    e.setImmovable(true);
+    e.proxDisparo = 0;
+    e.setVelocityX(30);
+  }
+}
+
+function update(time) {
+  if (juegoTerminado || nivelCompletado || tiendaAbierta || menuAbierto) return;
+
+  if (jugador.y > Y_MUERTE_POR_CAIDA) {
+    morir();
+    return;
+  }
+
+  const izquierda = cursores.left.isDown || teclas.A.isDown || tactil.izquierda;
+  const derecha = cursores.right.isDown || teclas.D.isDown || tactil.derecha;
+  const arriba = cursores.up.isDown || teclas.W.isDown || tactil.arriba;
+  const abajo = cursores.down.isDown || teclas.S.isDown || tactil.abajo;
+  const enSuelo = jugador.body.touching.down;
+
+  agachado = abajo && enSuelo;
+  if (agachado) {
+    jugador.body.setSize(30, 26).setOffset(2, 32);
+    jugador.setVelocityX(0);
+  } else {
+    jugador.body.setSize(30, 40).setOffset(2, 18);
+    if (izquierda) { jugador.setVelocityX(-190); mirandoDerecha = false; }
+    else if (derecha) { jugador.setVelocityX(190); mirandoDerecha = true; }
+    else jugador.setVelocityX(0);
+    if (arriba && enSuelo) jugador.setVelocityY(-430);
+  }
+
+  if ((Phaser.Input.Keyboard.JustDown(teclas.SPACE) || tactil.dispararPulsado) && !agachado) {
+    disparar(time, arriba);
+    finAnimDisparo = time + 160;
+  }
+  tactil.dispararPulsado = false;
+  if (Phaser.Input.Keyboard.JustDown(teclas.ONE)) cambiarArma('principal');
+  if (Phaser.Input.Keyboard.JustDown(teclas.TWO)) cambiarArma('secundaria');
+  if (Phaser.Input.Keyboard.JustDown(teclas.THREE)) cambiarArma('especial');
+  if (Phaser.Input.Keyboard.JustDown(teclas.M)) abrirMenu();
+
+  actualizarPose(time, enSuelo, izquierda || derecha);
+  jugador.setFlipX(!mirandoDerecha);
+
+  gruposEnemigos.children.iterate((e) => {
+    if (!e || !e.active) return;
+    const distancia = Phaser.Math.Distance.Between(e.x, e.y, jugador.x, jugador.y);
+    if (e.tipo === 'gargola') {
+      if (distancia < 260) {
+        e.setVelocityX(jugador.x < e.x ? -150 : 150);
+      } else {
+        if (e.x <= e.limIzq) e.setVelocityX(60);
+        if (e.x >= e.limDer) e.setVelocityX(-60);
+      }
+    } else if (e.tipo === 'espectro') {
+      e.baseY += (jugador.y - e.baseY) * 0.01;
+      e.baseY = Phaser.Math.Clamp(e.baseY, 220, 700);
+      e.y = e.baseY + Math.sin((time + e.origenT) / 300) * e.amplitud;
+      e.setVelocityX(e.x > jugador.x ? -80 : 80);
+    } else if (e.tipo === 'artillero') {
+      if (e.x <= e.limIzq) e.setVelocityX(30);
+      if (e.x >= e.limDer) e.setVelocityX(-30);
+      const cadencia = distancia < 300 ? 900 : 1700;
+      if (time > e.proxDisparo) {
+        e.proxDisparo = time + cadencia;
+        const dir = jugador.x < e.x ? -1 : 1;
+        const p = proyectilesEnemigos.create(e.x, e.y, 'proyectil_enemigo');
+        p.body.allowGravity = false;
+        p.setVelocityX(dir * 280);
+      }
+    }
+  });
+
+  [proyectiles, proyectilesEnemigos].forEach((grupo) => {
+    grupo.children.iterate((p) => {
+      if (p && (p.x < -20 || p.x > WORLD_W + 20 || p.y < -20 || p.y > WORLD_H + 20)) p.destroy();
+    });
+  });
+
+  monedasGrupo.children.iterate((m) => {
+    if (!m || !m.active) return;
+    const edad = time - m.spawnTime;
+    if (edad > 5000) { m.destroy(); return; }
+    if (edad > 3000) m.setAlpha(Math.floor(edad / 150) % 2 === 0 ? 1 : 0.15);
+  });
+}
+
+function actualizarPose(time, enSuelo, moviendose) {
+  let nuevaPose;
+  if (agachado) nuevaPose = 'jugador_agachado';
+  else if (time < finAnimDisparo) nuevaPose = 'jugador_disparo';
+  else if (!enSuelo) nuevaPose = 'jugador_salto';
+  else if (moviendose) nuevaPose = (Math.floor(time / 140) % 2 === 0) ? 'jugador_correr1' : 'jugador_correr2';
+  else nuevaPose = 'jugador_idle';
+
+  if (nuevaPose !== poseActual) {
+    poseActual = nuevaPose;
+    jugador.setTexture(nuevaPose);
+  }
+}
+
+function cambiarArma(clave) {
+  if (clave === 'secundaria' && !secundariaDesbloqueada) return;
+  if (clave === 'especial' && cargasEspecial <= 0) return;
+  armaActual = clave;
+  actualizarTextoArma();
+}
+
+function actualizarTextoArma() {
+  const a = ARMAS[armaActual];
+  let extra = '';
+  if (armaActual === 'especial') extra = ' [' + cargasEspecial + '/' + cargasEspecialMax + ']';
+  const bloqueada = !secundariaDesbloqueada ? '  (2: bloqueada)' : '';
+  textoArma.setText('Arma: ' + a.nombre + extra + bloqueada);
+}
+
+function disparar(time, haciaArriba) {
+  if (armaActual === 'especial' && cargasEspecial <= 0) { cambiarArma('principal'); return; }
+  const arma = ARMAS[armaActual];
+  if (time - ultimoDisparo < arma.cadencia) return;
+  ultimoDisparo = time;
+
+  let x = jugador.x, y = jugador.y, vx = 0, vy = 0;
+  if (haciaArriba) { y -= 24; vy = -arma.velocidad; }
+  else { x += mirandoDerecha ? 20 : -20; vx = mirandoDerecha ? arma.velocidad : -arma.velocidad; }
+
+  const p = proyectiles.create(x, y, arma.textura);
+  p.body.allowGravity = false;
+  p.setVelocity(vx, vy);
+  p.dano = arma.dano;
+
+  if (armaActual === 'especial') {
+    cargasEspecial -= 1;
+    actualizarTextoArma();
+    if (cargasEspecial <= 0) cambiarArma('principal');
+  }
+}
+
+function colisionEnemigo(jug, enemigo) {
+  const cayendoEncima = jug.body.velocity.y > 0 && (jug.y + jug.height / 2) < (enemigo.y - enemigo.height / 4);
+  if (cayendoEncima) {
+    eliminarEnemigo(enemigo);
+    jug.setVelocityY(-260);
+  } else {
+    recibirDanio(enemigo.dano || 1);
+  }
+}
+
+function golpearEnemigo(proyectil, enemigo) {
+  const dano = proyectil.dano || 1;
+  proyectil.destroy();
+  enemigo.hp -= dano;
+  if (enemigo.hp <= 0) {
+    eliminarEnemigo(enemigo);
+  } else {
+    enemigo.setTint(0xffffff);
+    escenaActiva.time.delayedCall(100, () => enemigo.clearTint && enemigo.clearTint());
+  }
+}
+
+function eliminarEnemigo(enemigo) {
+  const x = enemigo.x, y = enemigo.y, drop = enemigo.monedasDrop || 1;
+  enemigo.disableBody(true, true);
+  sumarPuntos(30);
+  for (let i = 0; i < drop; i++) {
+    const m = monedasGrupo.create(x + i * 14 - 7, y, 'moneda');
+    m.spawnTime = escenaActiva.time.now;
+    m.setBounce(0.2);
+  }
+}
+
+function golpeadoPorProyectil(jug, proyectil) {
+  proyectil.destroy();
+  recibirDanio(1);
+}
+
+function recogerMejora(jug, orbe) {
+  orbe.disableBody(true, true);
+  secundariaDesbloqueada = true;
+  actualizarTextoArma();
+  sumarPuntos(20);
+}
+
+function recogerMoneda(jug, m) {
+  m.destroy();
+  monedas += 1;
+  textoMonedas.setText('Monedas: ' + monedas);
+}
+
+function sumarPuntos(n) { puntuacion += n; textoPuntuacion.setText('Puntos: ' + puntuacion); }
+
+function completarNivel() {
+  if (nivelCompletado) return;
+  nivelCompletado = true;
+  jugador.setVelocity(0, 0);
+  jugador.body.moves = false;
+  escenaActiva.tweens.add({
+    targets: jugador, alpha: 0, scale: 0.3, duration: 700, ease: 'Cubic.easeIn',
+    onComplete: () => {
+      document.getElementById('puntuacion-final').textContent = 'Puntuacion: ' + puntuacion + ' | Monedas: ' + monedas;
+      document.getElementById('completado').style.display = 'flex';
+    }
+  });
+}
+
+function recibirDanio(cantidad) {
+  if (invulnerable) return;
+  corazonesActuales = Math.max(0, corazonesActuales - cantidad);
+  actualizarCorazones();
+  invulnerable = true;
+  jugador.setTint(0xff5a5a);
+  escenaActiva.time.delayedCall(900, () => { invulnerable = false; jugador.clearTint(); });
+
+  if (corazonesActuales <= 0) {
+    morir();
+  }
+}
+
+function morir() {
+  if (juegoTerminado) return;
+  juegoTerminado = true;
+  jugador.setVelocity(0, 0);
+  jugador.body.moves = false;
+  escenaActiva.tweens.add({
+    targets: jugador, alpha: 0, duration: 800, ease: 'Cubic.easeIn',
+    onComplete: () => {
+      document.getElementById('puntuacion-fin').textContent = 'Puntuacion: ' + puntuacion + ' | Monedas: ' + monedas;
+      document.getElementById('fin-partida').style.display = 'flex';
+    }
+  });
+}
+
+function actualizarCorazones() {
+  for (let i = 0; i < corazonesMax; i++) {
+    iconosCorazon[i].setTexture(i < corazonesActuales ? 'corazon_lleno' : 'corazon_vacio');
+  }
+}
+
+function abrirMenu() {
+  if (tiendaAbierta) return;
+  origenMenu = 'juego';
+  menuAbierto = true;
+  escenaActiva.scene.pause();
+  document.getElementById('menu-mapa').style.display = 'flex';
+}
+
+function cerrarMenu() {
+  menuAbierto = false;
+  document.getElementById('menu-mapa').style.display = 'none';
+  if (origenMenu === 'finPartida') {
+    document.getElementById('fin-partida').style.display = 'flex';
+  } else {
+    escenaActiva.scene.resume();
+  }
+}
+
+function abrirTiendaDesdeMenu() {
+  document.getElementById('menu-mapa').style.display = 'none';
+  tiendaAbierta = true;
+  menuAbierto = false;
+  document.getElementById('tienda').style.display = 'flex';
+  document.getElementById('monedas-tienda').textContent = 'Monedas: ' + monedas;
+  actualizarBotonesTienda();
+}
+
+function cerrarTienda() {
+  tiendaAbierta = false;
+  document.getElementById('tienda').style.display = 'none';
+  if (origenMenu === 'finPartida') {
+    document.getElementById('fin-partida').style.display = 'flex';
+  } else {
+    escenaActiva.scene.resume();
+  }
+}
+
+function actualizarBotonesTienda() {
+  document.getElementById('item-corazon').classList.toggle('deshabilitado', monedas < 8 || corazonesActuales >= corazonesMax);
+  document.getElementById('item-especial').classList.toggle('deshabilitado', monedas < 5 || cargasEspecial >= cargasEspecialMax);
+}
+
+function comprarCorazon() {
+  if (monedas < 8 || corazonesActuales >= corazonesMax) return;
+  monedas -= 8; corazonesActuales += 1;
+  actualizarCorazones();
+  document.getElementById('monedas-tienda').textContent = 'Monedas: ' + monedas;
+  textoMonedas.setText('Monedas: ' + monedas);
+  actualizarBotonesTienda();
+}
+
+function comprarCarga() {
+  if (monedas < 5 || cargasEspecial >= cargasEspecialMax) return;
+  monedas -= 5; cargasEspecial = Math.min(cargasEspecialMax, cargasEspecial + 2);
+  actualizarTextoArma();
+  document.getElementById('monedas-tienda').textContent = 'Monedas: ' + monedas;
+  textoMonedas.setText('Monedas: ' + monedas);
+  actualizarBotonesTienda();
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mapa de mundos - Cripta Neon</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; background: #e8d9b5; color: #4a3a24;
+    font-family: -apple-system, sans-serif; display: flex; flex-direction: column;
+    align-items: center; overflow-x: hidden;
+  }
+  #titulo { margin: 14px 0 4px; font-size: 20px; letter-spacing: 1px; }
+  #instrucciones { margin: 0 0 12px; font-size: 14px; color: #6b5638; text-align: center; max-width: 760px; padding: 0 12px; }
+  #game-wrap { position: relative; max-width: 100%; }
+  #game-container { border-radius: 10px; overflow: hidden; box-shadow: 0 0 24px rgba(90,70,40,0.3); }
+  #game-container canvas { max-width: 100%; height: auto; }
+  canvas { display: block; }
+
+  #controles-tactiles-mapa { position: absolute; inset: 0; display: none; pointer-events: none; z-index: 5; }
+  .btn-mapa {
+    position: absolute; bottom: 24px; width: 64px; height: 64px; border-radius: 50%;
+    background: rgba(90,70,50,0.25); border: 2px solid rgba(90,70,50,0.5); color: #4a3a24;
+    font-size: 22px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+    pointer-events: auto; touch-action: none; user-select: none;
+  }
+  #btn-mapa-izq { left: 24px; }
+  #btn-mapa-der { left: 100px; }
+  #btn-mapa-entrar { right: 24px; width: 84px; height: 84px; font-size: 14px; }
+</style>
+</head>
+<body>
+<div id="titulo">Mapa de mundos &mdash; Cripta Neon</div>
+<div id="instrucciones">Flechas izquierda/derecha: moverte por el camino &nbsp;|&nbsp; Espacio o Enter: entrar</div>
+<div id="game-wrap">
+  <div id="game-container"></div>
+  <div id="controles-tactiles-mapa">
+    <div class="btn-mapa" id="btn-mapa-izq">&#9664;</div>
+    <div class="btn-mapa" id="btn-mapa-der">&#9654;</div>
+    <div class="btn-mapa" id="btn-mapa-entrar">ENTRAR</div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.70.0/phaser.min.js"></script>
+<script>
+
+const VIEW_W = 800, VIEW_H = 450;
+
+const NODOS = [
+  { tipo: 'nivel', num: 1, x: 150, y: 300, estado: 'jugable', archivo: 'prototipo_v16.html' },
+  { tipo: 'nivel', num: 2, x: 380, y: 220, estado: 'pendiente' },
+  { tipo: 'nivel', num: 3, x: 610, y: 320, estado: 'pendiente' },
+  { tipo: 'nivel', num: 4, x: 840, y: 230, estado: 'pendiente' },
+  { tipo: 'nivel', num: 5, x: 1070, y: 320, estado: 'pendiente' },
+  { tipo: 'jefe', x: 1300, y: 230, estado: 'bloqueado' },
+  { tipo: 'mundo', num: 2, x: 1620, y: 300, estado: 'bloqueado' },
+  { tipo: 'mundo', num: 3, x: 1920, y: 230, estado: 'bloqueado' },
+  { tipo: 'mundo', num: 4, x: 2220, y: 320, estado: 'bloqueado' },
+  { tipo: 'mundo', num: 5, x: 2520, y: 230, estado: 'bloqueado' },
+  { tipo: 'mundo', num: 6, x: 2820, y: 320, estado: 'bloqueado' },
+  { tipo: 'mundo', num: 7, x: 3120, y: 230, estado: 'bloqueado' },
+  { tipo: 'mundo', num: 8, x: 3420, y: 320, estado: 'bloqueado' }
+];
+const WORLD_W = 3600, WORLD_H = 450;
+
+const COSMETICOS = { colorCuerpo: 0x4fb8e0, colorGuantes: 0xf4ead8, colorZapatillas: 0xffd76a, colorMejillas: 0xff9a9a };
+const PALETA = {
+  pergamino: 0xe8d9b5, pergaminoMancha: 0xd9c69c,
+  tinta: 0x5a4632, tintaSuave: 0x8a7455,
+  islaPradera: 0x8fcf72, islaPraderaBorde: 0x4f8a3a, islaPraderaDetalle: 0x6fae52,
+  nodoJugable: 0xffe066, nodoJugableBorde: 0x2c6b3a,
+  nodoPendiente: 0xf0e6c8, nodoPendienteBorde: 0xb7a878,
+  nodoBloqueado: 0xc9bd9c, nodoBloqueadoBorde: 0x8a7455,
+  jefe: 0x8a6a8a
+};
+
+// paletas "en la niebla" (apagadas) para el terreno de cada mundo aun bloqueado
+const BIOMAS = {
+  2: { base: 0x93a3ab, oscuro: 0x7a8a92, detalle: 0xa8b8bf },  // Tormenta en la Playa
+  3: { base: 0xb0a894, oscuro: 0x968e78, detalle: 0xc4bca6 },  // Desierto Arenoso
+  4: { base: 0x6e7a82, oscuro: 0x566067, detalle: 0x8a969c },  // Lago Siniestro
+  5: { base: 0x828f7e, oscuro: 0x687364, detalle: 0x9aa693 },  // Bosque Frondoso
+  6: { base: 0xaab3bc, oscuro: 0x8f99a3, detalle: 0xc6ced4 },  // Montaña Gélida
+  7: { base: 0x7c8a76, oscuro: 0x66735f, detalle: 0x96a38e },  // Pantano Mágico
+  8: { base: 0x9a7f7a, oscuro: 0x846863, detalle: 0xb0938d }   // Volcán Candente
+};
+
+let personaje, indiceActual = 0;
+let enMovimiento = false;
+let textoAviso, textoAvisoFondo;
+let escenaActiva;
+
+const config = {
+  type: Phaser.AUTO,
+  width: VIEW_W,
+  height: VIEW_H,
+  parent: 'game-container',
+  backgroundColor: '#e8d9b5',
+  scene: { preload, create, update }
+};
+
+new Phaser.Game(config);
+
+function preload() {
+  const g = this.add.graphics();
+  const forma = (dibujar, w, h, key) => { g.clear(); dibujar(); g.generateTexture(key, w, h); };
+
+  forma(() => {
+    g.fillStyle(COSMETICOS.colorCuerpo, 1); g.fillRoundedRect(2, 16, 16, 16, 6);
+    g.fillCircle(10, 12, 11);
+    g.fillStyle(COSMETICOS.colorMejillas, 1); g.fillCircle(4, 14, 2.2); g.fillCircle(16, 14, 2.2);
+    g.fillStyle(0xffffff, 1); g.fillCircle(6, 10, 4); g.fillCircle(14, 10, 4);
+    g.fillStyle(0x1b1230, 1); g.fillCircle(7, 11, 1.8); g.fillCircle(15, 11, 1.8);
+    g.fillStyle(COSMETICOS.colorZapatillas, 1); g.fillRoundedRect(0, 30, 8, 5, 2); g.fillRoundedRect(12, 30, 8, 5, 2);
+  }, 20, 36, 'personaje_mapa');
+
+  g.destroy();
+}
+
+function create() {
+  escenaActiva = this;
+
+  const fondo = this.add.graphics();
+  fondo.fillStyle(PALETA.pergaminoMancha, 0.5);
+  for (let i = 0; i < 26; i++) {
+    const mx = (i * 733) % WORLD_W, my = 60 + ((i * 197) % 340);
+    fondo.fillEllipse(mx, my, 90 + (i % 3) * 30, 50 + (i % 4) * 16);
+  }
+
+  // isla orgánica del Mundo 1
+  fondo.fillStyle(PALETA.islaPraderaBorde, 1);
+  fondo.fillEllipse(700, 300, 1360, 260);
+  fondo.fillEllipse(180, 260, 220, 170);
+  fondo.fillEllipse(1280, 300, 230, 190);
+  fondo.fillStyle(PALETA.islaPradera, 1);
+  fondo.fillEllipse(700, 300, 1320, 226);
+  fondo.fillEllipse(180, 260, 190, 140);
+  fondo.fillEllipse(1280, 300, 200, 160);
+  fondo.fillStyle(PALETA.pergamino, 1);
+  fondo.fillEllipse(60, 150, 120, 90);
+  fondo.fillEllipse(1360, 130, 130, 100);
+  fondo.fillEllipse(700, 440, 200, 70);
+  fondo.fillStyle(PALETA.islaPraderaDetalle, 1);
+  for (let x = 60; x < 1360; x += 90) fondo.fillCircle(x, 300 + Math.sin(x / 90) * 30, 5);
+
+  this.add.text(220, 150, 'Pradera Serena', { fontSize: '18px', fontStyle: 'italic', color: '#3a5a2c' });
+
+  // camino de tinta punteado entre nodos consecutivos
+  fondo.fillStyle(PALETA.tinta, 1);
+  for (let i = 0; i < NODOS.length - 1; i++) {
+    dibujarPunteado(fondo, NODOS[i].x, NODOS[i].y, NODOS[i + 1].x, NODOS[i + 1].y);
+  }
+
+  NODOS.forEach((nodo, i) => dibujarNodo(this, nodo, i));
+
+  personaje = this.add.image(NODOS[0].x, NODOS[0].y - 30, 'personaje_mapa');
+  this.tweens.add({ targets: personaje, y: personaje.y - 6, duration: 500, yoyo: true, repeat: -1 });
+
+  this.cameras.main.setBounds(0, 0, WORLD_W, WORLD_H);
+  this.cameras.main.startFollow(personaje, true, 0.1, 0.1);
+
+  dibujarRosaDeLosVientos(this, 50, 50);
+
+  textoAvisoFondo = this.add.rectangle(VIEW_W / 2, VIEW_H - 50, 300, 34, 0x1a1410, 0.75).setScrollFactor(0).setVisible(false);
+  textoAviso = this.add.text(VIEW_W / 2, VIEW_H - 50, '', { fontSize: '14px', color: '#ffffff' }).setOrigin(0.5).setScrollFactor(0).setVisible(false);
+
+  this.input.keyboard.on('keydown-LEFT', () => moverSeleccion(-1));
+  this.input.keyboard.on('keydown-RIGHT', () => moverSeleccion(1));
+  this.input.keyboard.on('keydown-SPACE', entrarEnNodo);
+  this.input.keyboard.on('keydown-ENTER', entrarEnNodo);
+
+  configurarControlesTactilesMapa();
+}
+
+function configurarControlesTactilesMapa() {
+  const esTactil = ('ontouchstart' in window) || navigator.maxTouchPoints > 0 || window.matchMedia('(pointer: coarse)').matches;
+  if (!esTactil) return;
+  document.getElementById('controles-tactiles-mapa').style.display = 'block';
+  document.getElementById('btn-mapa-izq').addEventListener('pointerdown', (e) => { e.preventDefault(); moverSeleccion(-1); });
+  document.getElementById('btn-mapa-der').addEventListener('pointerdown', (e) => { e.preventDefault(); moverSeleccion(1); });
+  document.getElementById('btn-mapa-entrar').addEventListener('pointerdown', (e) => { e.preventDefault(); entrarEnNodo(); });
+}
+
+function update() {}
+
+function dibujarRosaDeLosVientos(escena, cx, cy) {
+  const g = escena.add.graphics().setScrollFactor(0);
+  g.lineStyle(2, PALETA.tinta, 0.7);
+  g.strokeCircle(cx, cy, 26);
+  g.fillStyle(PALETA.tinta, 0.85);
+  g.fillTriangle(cx, cy - 24, cx - 6, cy, cx + 6, cy);
+  g.fillTriangle(cx, cy + 24, cx - 6, cy, cx + 6, cy);
+  g.fillTriangle(cx - 24, cy, cx, cy - 6, cx, cy + 6);
+  g.fillTriangle(cx + 24, cy, cx, cy - 6, cx, cy + 6);
+  escena.add.text(cx, cy - 38, 'N', { fontSize: '12px', color: '#5a4632' }).setOrigin(0.5).setScrollFactor(0);
+}
+
+function dibujarPunteado(g, x1, y1, x2, y2) {
+  const dist = Phaser.Math.Distance.Between(x1, y1, x2, y2);
+  const pasos = Math.floor(dist / 22);
+  for (let i = 1; i < pasos; i++) {
+    const t = i / pasos;
+    g.fillCircle(x1 + (x2 - x1) * t, y1 + (y2 - y1) * t, 4);
+  }
+}
+
+function dibujarNodo(escena, nodo, indice) {
+  const g = escena.add.graphics();
+  if (nodo.tipo === 'nivel') {
+    const relleno = nodo.estado === 'jugable' ? PALETA.nodoJugable : PALETA.nodoPendiente;
+    const borde = nodo.estado === 'jugable' ? PALETA.nodoJugableBorde : PALETA.nodoPendienteBorde;
+    g.fillStyle(relleno, 1); g.fillCircle(nodo.x, nodo.y, 26);
+    g.lineStyle(4, borde, 1); g.strokeCircle(nodo.x, nodo.y, 26);
+    escena.add.text(nodo.x, nodo.y, String(nodo.num), { fontSize: '22px', color: '#2c3b2e', fontStyle: 'bold' }).setOrigin(0.5);
+    escena.add.text(nodo.x, nodo.y + 40, nodo.estado === 'jugable' ? 'Nivel ' + nodo.num : 'Pendiente', { fontSize: '12px', color: '#274a52' }).setOrigin(0.5);
+  } else if (nodo.tipo === 'jefe') {
+    g.fillStyle(PALETA.jefe, 1); g.fillRoundedRect(nodo.x - 26, nodo.y - 22, 52, 44, 6);
+    g.fillTriangle(nodo.x - 26, nodo.y - 22, nodo.x - 10, nodo.y - 38, nodo.x + 6, nodo.y - 22);
+    g.fillTriangle(nodo.x - 6, nodo.y - 22, nodo.x + 10, nodo.y - 38, nodo.x + 26, nodo.y - 22);
+    g.fillStyle(0x3a2a2a, 1); g.fillRect(nodo.x - 6, nodo.y - 4, 12, 26);
+    escena.add.text(nodo.x, nodo.y + 40, 'Jefe del mundo', { fontSize: '12px', color: '#274a52' }).setOrigin(0.5);
+  } else {
+    dibujarTerrenoMundo(g, nodo.num, nodo.x, nodo.y);
+    g.setAlpha(1);
+    g.lineStyle(2, PALETA.tintaSuave, 0.6);
+    dibujarCirculoDiscontinuo(g, nodo.x, nodo.y, 95);
+    g.fillStyle(PALETA.nodoBloqueado, 1); g.fillCircle(nodo.x, nodo.y, 24);
+    g.lineStyle(4, PALETA.nodoBloqueadoBorde, 1); g.strokeCircle(nodo.x, nodo.y, 24);
+    g.fillStyle(0x5a4632, 1);
+    g.fillRoundedRect(nodo.x - 8, nodo.y - 2, 16, 12, 2);
+    g.lineStyle(3, 0x5a4632, 1);
+    g.beginPath(); g.arc(nodo.x, nodo.y - 4, 6, Math.PI, 0, false); g.strokePath();
+    escena.add.text(nodo.x, nodo.y + 38, 'Mundo ' + nodo.num, { fontSize: '12px', fontStyle: 'italic', color: '#6b5638' }).setOrigin(0.5);
+  }
+}
+
+function dibujarCirculoDiscontinuo(g, cx, cy, r) {
+  const pasos = 40;
+  for (let i = 0; i < pasos; i += 2) {
+    const a1 = (i / pasos) * Math.PI * 2, a2 = ((i + 1) / pasos) * Math.PI * 2;
+    g.beginPath();
+    g.moveTo(cx + Math.cos(a1) * r, cy + Math.sin(a1) * r * 0.6);
+    g.lineTo(cx + Math.cos(a2) * r, cy + Math.sin(a2) * r * 0.6);
+    g.strokePath();
+  }
+}
+
+function dibujarTerrenoMundo(g, num, cx, cy) {
+  const b = BIOMAS[num];
+  g.setAlpha(0.55);
+  if (num === 2) { // Tormenta en la Playa
+    g.fillStyle(b.base, 1); g.fillEllipse(cx, cy + 60, 240, 90);
+    g.fillStyle(b.oscuro, 1); g.fillEllipse(cx, cy + 90, 260, 50);
+    g.fillStyle(b.detalle, 1);
+    for (let i = -1; i <= 1; i++) g.fillEllipse(cx + i * 60, cy + 78, 40, 10);
+  } else if (num === 3) { // Desierto Arenoso
+    g.fillStyle(b.base, 1); g.fillEllipse(cx, cy + 70, 260, 100);
+    g.fillStyle(b.oscuro, 1); g.fillEllipse(cx - 60, cy + 90, 140, 46); g.fillEllipse(cx + 70, cy + 100, 140, 40);
+    g.fillStyle(b.detalle, 1); g.fillRect(cx + 90, cy + 30, 6, 34); g.fillRect(cx + 80, cy + 44, 6, 20);
+  } else if (num === 4) { // Lago Siniestro
+    g.fillStyle(b.oscuro, 1); g.fillEllipse(cx, cy + 70, 250, 100);
+    g.fillStyle(b.base, 1); g.fillEllipse(cx, cy + 70, 200, 74);
+    g.fillStyle(b.detalle, 1);
+    for (let i = -1; i <= 1; i++) g.fillRect(cx + i * 44, cy + 40, 4, 24);
+  } else if (num === 5) { // Bosque Frondoso
+    g.fillStyle(b.base, 1); g.fillEllipse(cx, cy + 70, 250, 100);
+    g.fillStyle(b.oscuro, 1);
+    [-70, -20, 30, 80].forEach((dx) => { g.fillCircle(cx + dx, cy + 40, 26); });
+    g.fillStyle(b.detalle, 1);
+    [-70, -20, 30, 80].forEach((dx) => { g.fillCircle(cx + dx, cy + 30, 16); });
+  } else if (num === 6) { // Montaña Gélida
+    g.fillStyle(b.oscuro, 1);
+    g.fillTriangle(cx - 90, cy + 90, cx - 30, cy - 10, cx + 20, cy + 90);
+    g.fillTriangle(cx - 10, cy + 90, cx + 50, cy - 30, cx + 100, cy + 90);
+    g.fillStyle(b.detalle, 1);
+    g.fillTriangle(cx - 55, cy + 34, cx - 30, cy - 10, cx - 6, cy + 34);
+    g.fillTriangle(cx + 30, cy + 18, cx + 50, cy - 30, cx + 68, cy + 18);
+  } else if (num === 7) { // Pantano Mágico
+    g.fillStyle(b.base, 1); g.fillEllipse(cx, cy + 70, 250, 96);
+    g.fillStyle(b.oscuro, 1); g.fillEllipse(cx - 60, cy + 80, 90, 40); g.fillEllipse(cx + 70, cy + 88, 100, 36);
+    g.fillStyle(b.detalle, 1); g.fillRect(cx, cy + 20, 5, 50); g.fillCircle(cx - 6, cy + 18, 9); g.fillCircle(cx + 8, cy + 26, 8);
+  } else if (num === 8) { // Volcán Candente
+    g.fillStyle(b.oscuro, 1); g.fillTriangle(cx - 80, cy + 90, cx, cy - 40, cx + 80, cy + 90);
+    g.fillStyle(b.base, 1); g.fillTriangle(cx - 20, cy + 90, cx, cy + 20, cx + 20, cy + 90);
+    g.fillStyle(b.detalle, 0.7); g.fillEllipse(cx, cy - 55, 30, 18); g.fillEllipse(cx + 12, cy - 72, 22, 14);
+  }
+}
+
+function moverSeleccion(direccion) {
+  if (enMovimiento) return;
+  const nuevoIndice = Phaser.Math.Clamp(indiceActual + direccion, 0, NODOS.length - 1);
+  if (nuevoIndice === indiceActual) return;
+  indiceActual = nuevoIndice;
+  const destino = NODOS[indiceActual];
+  personaje.setFlipX(direccion < 0);
+  enMovimiento = true;
+  escenaActiva.tweens.add({
+    targets: personaje, x: destino.x, y: destino.y - 30, duration: 380, ease: 'Sine.easeInOut',
+    onComplete: () => { enMovimiento = false; }
+  });
+}
+
+function entrarEnNodo() {
+  const nodo = NODOS[indiceActual];
+  if (nodo.tipo === 'nivel' && nodo.estado === 'jugable') {
+    window.location.href = nodo.archivo;
+    return;
+  }
+  let mensaje = 'Bloqueado';
+  if (nodo.tipo === 'nivel') mensaje = 'Nivel en construccion';
+  else if (nodo.tipo === 'jefe') mensaje = 'Completa los 5 niveles primero';
+  else mensaje = 'Mundo bloqueado';
+  mostrarAviso(mensaje);
+}
+
+function mostrarAviso(mensaje) {
+  textoAviso.setText(mensaje);
+  textoAviso.setVisible(true);
+  textoAvisoFondo.setVisible(true);
+  escenaActiva.time.delayedCall(1400, () => {
+    textoAviso.setVisible(false);
+    textoAvisoFondo.setVisible(false);
+  });
+}
+</script>
+</body>
+</html>
