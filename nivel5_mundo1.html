@@ -147,6 +147,7 @@
     <h2 id="txt-completado-tit">Nivel completado</h2>
     <p id="puntuacion-final"></p>
     <button class="cerrar-overlay" id="reiniciar">Volver a jugar</button>
+    <button class="cerrar-overlay" id="completado-salir-mapa">Salir al mapa</button>
   </div>
 
   <div class="overlay" id="fin-partida">
@@ -367,6 +368,7 @@ function aplicarIdioma() {
   document.getElementById('txt-completado-tit').textContent = t('completado_tit');
   document.getElementById('txt-fin-partida-tit').textContent = t('fin_partida_tit');
   document.getElementById('reiniciar').textContent = t('volver_a_jugar');
+  document.getElementById('completado-salir-mapa').textContent = t('salir_al_mapa');
   document.getElementById('reiniciar-nivel').textContent = t('reiniciar_nivel');
   document.getElementById('salir-mapa').textContent = t('salir_al_mapa');
   document.querySelectorAll('#menu-mapa .cerrar-overlay, #controles .cerrar-overlay, #idioma-sonido .cerrar-overlay, #tienda .cerrar-overlay').forEach((b) => { b.textContent = t('cerrar'); });
@@ -955,6 +957,7 @@ function create() {
   document.getElementById('cerrar-menu').onclick = cerrarMenu;
   document.getElementById('cerrar-tienda').onclick = cerrarTienda;
   document.getElementById('reiniciar').onclick = () => location.reload();
+  document.getElementById('completado-salir-mapa').onclick = () => { window.location.href = 'mapa_mundos_v28.html'; };
   document.getElementById('reiniciar-nivel').onclick = () => location.reload();
   document.getElementById('salir-mapa').onclick = () => { window.location.href = 'mapa_mundos_v28.html'; };
 
