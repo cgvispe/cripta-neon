@@ -1,0 +1,1372 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>El Sendero de los Cofres - Nivel 2</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; background: #cdeefc; color: #2c3b2e;
+    font-family: -apple-system, sans-serif; display: flex; flex-direction: column;
+    align-items: center; overflow-x: hidden;
+  }
+  #titulo { margin: 14px 0 4px; font-size: 20px; letter-spacing: 1px; }
+  #instrucciones { margin: 0 0 12px; font-size: 14px; color: #4a5d4c; text-align: center; max-width: 760px; padding: 0 12px; }
+  #game-wrap { position: relative; border-radius: 10px; overflow: hidden; box-shadow: 0 0 24px rgba(80,130,90,0.3); }
+  canvas { display: block; }
+  .overlay {
+    position: absolute; inset: 0; background: rgba(20,30,20,0.9);
+    display: none; align-items: center; justify-content: center; flex-direction: column;
+  }
+  .overlay h2 { color: #8fe08a; margin: 0 0 4px; }
+  .overlay p { color: #cfe8cf; margin: 0 0 16px; font-size: 14px; }
+  .item-tienda {
+    background: #2a3f2a; border: 1px solid #8fe08a; border-radius: 8px;
+    padding: 10px 18px; margin: 6px 0; width: 260px; display: flex;
+    justify-content: space-between; align-items: center; cursor: pointer; color: #e8f5e8;
+  }
+  .item-tienda:hover { background: #3a523a; }
+  .item-tienda.deshabilitado { opacity: 0.4; cursor: not-allowed; }
+  .fila-opcion { display: flex; align-items: center; justify-content: space-between; width: 260px; margin: 8px 0; font-size: 14px; color: #e8f5e8; }
+  .botones-idioma { display: flex; gap: 6px; }
+  .btn-idioma { background: transparent; border: 1px solid #cfe8cf; color: #cfe8cf; border-radius: 6px; padding: 4px 8px; font-size: 12px; cursor: pointer; font-weight: 700; }
+  .btn-idioma.activo { background: #8fe08a; color: #1a3a1a; border-color: #8fe08a; }
+  .btn-sonido { background: transparent; border: 1px solid #cfe8cf; color: #cfe8cf; border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
+  .fila-color { width: 260px; margin: 10px 0; text-align: left; }
+  .fila-color > span { display: block; font-size: 13px; color: #cfe8cf; margin-bottom: 6px; }
+  .swatches { display: flex; gap: 8px; flex-wrap: wrap; }
+  .swatch {
+    width: 30px; height: 30px; border-radius: 50%; border: 3px solid transparent; cursor: pointer;
+    position: relative; display: flex; align-items: center; justify-content: center;
+  }
+  .swatch.seleccionado { border-color: #ffe066; }
+  .swatch.bloqueado { opacity: 0.45; }
+  .swatch .precio {
+    position: absolute; bottom: -14px; left: 50%; transform: translateX(-50%);
+    font-size: 10px; color: #cfe8cf;
+  }
+  .swatch.sin-color { background: repeating-linear-gradient(45deg, #444 0 4px, #666 4px 8px); }
+  .cerrar-overlay {
+    margin-top: 14px; background: transparent; border: 1px solid #cfe8cf; color: #cfe8cf;
+    padding: 6px 16px; border-radius: 6px; cursor: pointer;
+  }
+
+  #game-wrap { max-width: 100%; }
+  #game-container canvas { max-width: 100%; height: auto; }
+
+  #controles-tactiles {
+    position: absolute; inset: 0; display: none; pointer-events: none; z-index: 5;
+  }
+  #joystick-base {
+    position: absolute; left: 24px; bottom: 24px; width: 110px; height: 110px;
+    border-radius: 50%; background: rgba(255,255,255,0.18); border: 2px solid rgba(255,255,255,0.4);
+    pointer-events: auto; touch-action: none;
+  }
+  #joystick-nudo {
+    position: absolute; left: 30px; top: 30px; width: 50px; height: 50px; border-radius: 50%;
+    background: rgba(255,255,255,0.55); border: 2px solid rgba(255,255,255,0.7);
+  }
+  .btn-tactil {
+    position: absolute; border-radius: 50%; background: rgba(255,255,255,0.25);
+    border: 2px solid rgba(255,255,255,0.5); color: #fff; font-size: 12px; font-weight: 600;
+    display: flex; align-items: center; justify-content: center; pointer-events: auto; touch-action: none;
+    user-select: none;
+  }
+  #btn-saltar { right: 30px; bottom: 90px; width: 72px; height: 72px; font-size: 13px; }
+  #btn-disparar { right: 120px; bottom: 34px; width: 72px; height: 72px; font-size: 13px; }
+  #btn-agachar { right: 30px; bottom: 20px; width: 46px; height: 46px; font-size: 11px; }
+  #btn-menu { right: 16px; top: 16px; width: 42px; height: 42px; font-size: 18px; }
+  .btn-arma { width: 38px; height: 38px; font-size: 13px; top: 16px; }
+  #btn-arma1 { left: 16px; }
+  #btn-arma2 { left: 62px; }
+  #btn-arma3 { left: 108px; }
+</style>
+</head>
+<body>
+<div id="titulo">Mundo 1: Pradera Serena &mdash; Nivel 2: El Sendero de los Cofres</div>
+<div id="instrucciones">
+  Flechas o A/D: moverte &nbsp;|&nbsp; Arriba/W: saltar &nbsp;|&nbsp; Abajo/S: agacharte &nbsp;|&nbsp;
+  Espacio: disparar (arriba + espacio: hacia arriba) &nbsp;|&nbsp; 1/2/3: cambiar de arma &nbsp;|&nbsp; M: menu/tienda
+</div>
+<div id="game-wrap">
+  <div id="game-container"></div>
+
+  <div class="overlay" id="menu-mapa">
+    <h2 id="txt-menu-titulo">Menu</h2>
+    <div class="item-tienda" id="abrir-tienda-desde-menu"><span id="txt-tienda">Tienda</span><span>&gt;</span></div>
+    <div class="item-tienda" id="ir-al-mapa"><span id="txt-mapa-de-mundos">Mapa de mundos</span><span>&gt;</span></div>
+    <div class="item-tienda" id="ver-controles"><span id="txt-controles-item">Controles</span><span>&gt;</span></div>
+    <div class="item-tienda" id="ver-idioma-sonido"><span id="txt-idioma-sonido-item">Idioma y sonido</span><span>&gt;</span></div>
+    <div class="item-tienda" id="guardar-salir-inicio"><span id="txt-guardar-salir">Guardar y salir al inicio</span><span>&gt;</span></div>
+    <button class="cerrar-overlay" id="cerrar-menu">Cerrar</button>
+  </div>
+
+  <div class="overlay" id="controles">
+    <h2 id="txt-controles-tit">Controles</h2>
+    <p id="txt-controles-lista" style="text-align:left; max-width:280px;"></p>
+    <button class="cerrar-overlay" id="cerrar-controles">Cerrar</button>
+  </div>
+
+  <div class="overlay" id="idioma-sonido">
+    <h2 id="txt-idioma-sonido-tit">Idioma y sonido</h2>
+    <div class="fila-opcion">
+      <span id="txt-idioma-label">Idioma</span>
+      <div class="botones-idioma">
+        <button class="btn-idioma" data-idioma="es">ES</button>
+        <button class="btn-idioma" data-idioma="en">EN</button>
+        <button class="btn-idioma" data-idioma="fr">FR</button>
+        <button class="btn-idioma" data-idioma="it">IT</button>
+      </div>
+    </div>
+    <div class="fila-opcion">
+      <span id="txt-sonido-label">Sonido</span>
+      <div class="btn-sonido" id="btn-sonido">Activado</div>
+    </div>
+    <button class="cerrar-overlay" id="cerrar-idioma-sonido">Cerrar</button>
+  </div>
+
+  <div class="overlay" id="tienda">
+    <h2 id="txt-tienda-tit">Tienda</h2>
+    <p id="monedas-tienda">Monedas: 0</p>
+    <div class="fila-color">
+      <span id="txt-color-guantes">Guantes</span>
+      <div class="swatches" id="swatches-guantes"></div>
+    </div>
+    <div class="fila-color">
+      <span id="txt-color-zapatillas">Zapatillas</span>
+      <div class="swatches" id="swatches-zapatillas"></div>
+    </div>
+    <div class="fila-color">
+      <span id="txt-color-sombrero">Sombrero</span>
+      <div class="swatches" id="swatches-sombrero"></div>
+    </div>
+    <button class="cerrar-overlay" id="cerrar-tienda">Cerrar</button>
+  </div>
+
+  <div class="overlay" id="completado">
+    <h2 id="txt-completado-tit">Nivel completado</h2>
+    <p id="puntuacion-final"></p>
+    <button class="cerrar-overlay" id="reiniciar">Volver a jugar</button>
+  </div>
+
+  <div class="overlay" id="fin-partida">
+    <h2 id="txt-fin-partida-tit">Fin de la partida</h2>
+    <p id="puntuacion-fin"></p>
+    <button class="cerrar-overlay" id="reiniciar-nivel">Reiniciar nivel</button>
+    <button class="cerrar-overlay" id="salir-mapa">Salir al mapa</button>
+  </div>
+
+  <div class="overlay" id="intro-nivel" style="display:flex; background:#000000; transition: opacity 0.5s ease;">
+    <h2>Mundo 1: Pradera Serena</h2>
+    <h3 style="margin:2px 0 18px; color:#ffe066; font-weight:600;">Nivel 2: El Sendero de los Cofres</h3>
+    <p id="txt-intro-monedas">Monedas: 0</p>
+    <p id="txt-intro-toca" style="font-size:12px; opacity:0.8; margin-top:14px;">(toca o pulsa una tecla para empezar)</p>
+  </div>
+
+  <div id="controles-tactiles">
+    <div id="joystick-base"><div id="joystick-nudo"></div></div>
+    <div class="btn-tactil" id="btn-saltar">SALTAR</div>
+    <div class="btn-tactil" id="btn-disparar">DISPARO</div>
+    <div class="btn-tactil" id="btn-agachar">AGACH</div>
+    <div class="btn-tactil" id="btn-menu">M</div>
+    <div class="btn-tactil btn-arma" id="btn-arma1">1</div>
+    <div class="btn-tactil btn-arma" id="btn-arma2">2</div>
+    <div class="btn-tactil btn-arma" id="btn-arma3">3</div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.70.0/phaser.min.js" crossorigin="anonymous"></script>
+<script>
+
+const WORLD_W = 3600, WORLD_H = 960;
+const Y_MUERTE_POR_CAIDA = 920;
+const VIEW_W = 800, VIEW_H = 450;
+
+let COSMETICOS = { colorCuerpo: 0x4fb8e0, colorGuantes: 0xf4ead8, colorZapatillas: 0xffd76a, colorMejillas: 0xff9a9a, sombrero: null, colorSombrero: 0xd94f4f };
+
+const COLORES_GUANTES = [
+  { id: 'blanco', hex: 0xf4ead8, costo: 0 }, { id: 'negro', hex: 0x2a2a2a, costo: 5 },
+  { id: 'rojo', hex: 0xd94f4f, costo: 5 }, { id: 'azul', hex: 0x4f8fd9, costo: 5 }, { id: 'dorado', hex: 0xe8c848, costo: 8 }
+];
+const COLORES_ZAPATILLAS = [
+  { id: 'amarillo', hex: 0xffd76a, costo: 0 }, { id: 'rojo', hex: 0xd94f4f, costo: 5 },
+  { id: 'azul', hex: 0x4f8fd9, costo: 5 }, { id: 'verde', hex: 0x4a9f4a, costo: 5 }, { id: 'negro', hex: 0x2a2a2a, costo: 8 }
+];
+const COLORES_SOMBRERO = [
+  { id: 'ninguno', hex: null, costo: 0 }, { id: 'rojo', hex: 0xd94f4f, costo: 10 },
+  { id: 'verde', hex: 0x4a9f4a, costo: 10 }, { id: 'morado', hex: 0x8a4fd9, costo: 10 }, { id: 'dorado', hex: 0xe8c848, costo: 15 }
+];
+
+function leerCosmeticos() {
+  const datos = leerGuardado();
+  return datos.cosmeticos || {
+    guantes: 'blanco', zapatillas: 'amarillo', sombrero: 'ninguno',
+    desbloqueados: { guantes: ['blanco'], zapatillas: ['amarillo'], sombrero: ['ninguno'] }
+  };
+}
+
+function guardarCosmeticos(cosm) {
+  const datos = leerGuardado();
+  datos.cosmeticos = cosm;
+  localStorage.setItem('cripta_neon_guardado', JSON.stringify(datos));
+}
+
+function aplicarCosmeticosATextura() {
+  const cosm = leerCosmeticos();
+  const g = COLORES_GUANTES.find((c) => c.id === cosm.guantes) || COLORES_GUANTES[0];
+  const z = COLORES_ZAPATILLAS.find((c) => c.id === cosm.zapatillas) || COLORES_ZAPATILLAS[0];
+  const s = COLORES_SOMBRERO.find((c) => c.id === cosm.sombrero) || COLORES_SOMBRERO[0];
+  COSMETICOS.colorGuantes = g.hex;
+  COSMETICOS.colorZapatillas = z.hex;
+  COSMETICOS.sombrero = s.hex !== null ? s.id : null;
+  COSMETICOS.colorSombrero = s.hex !== null ? s.hex : COSMETICOS.colorSombrero;
+}
+
+const PALETA = {
+  tierra: 0x8a5a3c, hierba: 0x6bbf59, hierbaOscura: 0x529147,
+  cielo: 0x8fd3f4, sol: 0xffe066, nube: 0xffffff,
+  colinaLejos: 0x9fe08f, colinaCerca: 0x7fcf6a, arbusto: 0x3f7a38,
+  jabali: 0x6b4a2c, jabaliOscuro: 0x4a3018, jabaliColmillo: 0xf4ead8,
+  abeja: 0xf4c430, abejaFranja: 0x2a2a2a, abejaAla: 0xeaf6ff,
+  erizo: 0x8a6a4a, erizoPua: 0x5a4530, erizoPanza: 0xe8d5b0,
+  rana: 0x5fae4a, ranaOscuro: 0x3f7a38, ranaPanza: 0xd8e8b0,
+  ardilla: 0xb0632e, ardillaClaro: 0xe0a878, ardillaCola: 0x8a4a1f,
+  proyectilBase: 0xffd76a, proyectilMejora: 0x00e5c7, proyectilEspecial: 0xff7a3f,
+  proyectilEnemigo: 0x8a6a4a,
+  moneda: 0xffd76a, pickup: 0x00e5c7
+};
+
+const ARMAS = {
+  principal: { nombre: 'Ballesta', textura: 'proyectil_base', dano: 1, cadencia: 420, velocidad: 480 },
+  secundaria: { nombre: 'Rayo arcano', textura: 'proyectil_mejora', dano: 2, cadencia: 300, velocidad: 520 },
+  especial: { nombre: 'Bola de fuego', textura: 'proyectil_especial', dano: 3, cadencia: 700, velocidad: 380 }
+};
+
+let jugador, gruposEnemigos, plataformas, proyectiles, proyectilesEnemigos, monedasGrupo, pickupArma, portalFinal;
+let pinchosGrupo, cofresGrupo, plataformasMoviles;
+let cursores, teclas = {};
+let mirandoDerecha = true;
+let agachado = false;
+let finAnimDisparo = 0;
+let poseActual = 'idle';
+let secundariaDesbloqueada = false;
+let cargasEspecial = 2;
+const cargasEspecialMax = 4;
+let armaActual = 'principal';
+let ultimoDisparo = 0;
+let puntuacion = 0, monedas = 0;
+let corazonesMax = 5, corazonesActuales = 5;
+let invulnerable = false;
+let juegoTerminado = false;
+let nivelCompletado = false;
+let tiendaAbierta = false;
+let menuAbierto = false;
+let origenMenu = 'juego';
+let textoPuntuacion, textoMonedas, textoArma, iconosCorazon = [];
+let introActiva = true;
+let textoAviso, textoAvisoFondo;
+let escenaActiva;
+
+const tactil = { izquierda: false, derecha: false, abajo: false, arriba: false, dispararPulsado: false };
+
+const TRADUCCIONES = {
+  es: {
+    menu_titulo: 'Menu', tienda: 'Tienda', mapa_de_mundos: 'Mapa de mundos', controles_item: 'Controles',
+    idioma_sonido_item: 'Idioma y sonido', guardar_salir: 'Guardar y salir al inicio', cerrar: 'Cerrar',
+    controles_tit: 'Controles',
+    controles_lista: 'Flechas / A D: moverte<br>Arriba / W: saltar<br>Abajo / S: agacharte<br>Espacio: disparar (manten arriba para disparar hacia arriba)<br>1 / 2 / 3: cambiar de arma<br>M: menu<br><br>En movil: joystick para moverte, y los botones de SALTO, DISPARO, AGACH, armas y menu.',
+    idioma_sonido_tit: 'Idioma y sonido', idioma: 'Idioma', sonido: 'Sonido', sonido_on: 'Activado', sonido_off: 'Silenciado',
+    tienda_tit: 'Tienda', color_guantes: 'Guantes', color_zapatillas: 'Zapatillas', color_sombrero: 'Sombrero', sin_monedas: 'No tienes monedas suficientes',
+    completado_tit: 'Nivel completado', fin_partida_tit: 'Fin de la partida',
+    volver_a_jugar: 'Volver a jugar', reiniciar_nivel: 'Reiniciar nivel', salir_al_mapa: 'Salir al mapa',
+    puntos: 'Puntos: ', monedas_lbl: 'Monedas: ', arma_lbl: 'Arma: ', bloqueada: '  (2: bloqueada)',
+    arma_ballesta: 'Ballesta', arma_rayo: 'Rayo arcano', arma_bola: 'Bola de fuego',
+    puntuacion_final: 'Puntuacion: ', separador_monedas: ' | Monedas: ', toca_para_empezar: '(toca o pulsa una tecla para empezar)'
+  },
+  en: {
+    menu_titulo: 'Menu', tienda: 'Shop', mapa_de_mundos: 'World map', controles_item: 'Controls',
+    idioma_sonido_item: 'Language and sound', guardar_salir: 'Save and exit to title', cerrar: 'Close',
+    controles_tit: 'Controls',
+    controles_lista: 'Arrows / A D: move<br>Up / W: jump<br>Down / S: crouch<br>Space: shoot (hold up to shoot upward)<br>1 / 2 / 3: switch weapon<br>M: menu<br><br>On mobile: joystick to move, and the JUMP, SHOOT, CROUCH, weapon and menu buttons.',
+    idioma_sonido_tit: 'Language and sound', idioma: 'Language', sonido: 'Sound', sonido_on: 'On', sonido_off: 'Muted',
+    tienda_tit: 'Shop', color_guantes: 'Gloves', color_zapatillas: 'Shoes', color_sombrero: 'Hat', sin_monedas: 'Not enough coins',
+    completado_tit: 'Level complete', fin_partida_tit: 'Game over',
+    volver_a_jugar: 'Play again', reiniciar_nivel: 'Restart level', salir_al_mapa: 'Exit to map',
+    puntos: 'Score: ', monedas_lbl: 'Coins: ', arma_lbl: 'Weapon: ', bloqueada: '  (2: locked)',
+    arma_ballesta: 'Crossbow', arma_rayo: 'Arcane ray', arma_bola: 'Fireball',
+    puntuacion_final: 'Score: ', separador_monedas: ' | Coins: ', toca_para_empezar: '(tap or press a key to start)'
+  },
+  fr: {
+    menu_titulo: 'Menu', tienda: 'Boutique', mapa_de_mundos: 'Carte du monde', controles_item: 'Controles',
+    idioma_sonido_item: 'Langue et son', guardar_salir: 'Sauvegarder et quitter', cerrar: 'Fermer',
+    controles_tit: 'Controles',
+    controles_lista: 'Fleches / A D : se deplacer<br>Haut / W : sauter<br>Bas / S : s\'accroupir<br>Espace : tirer (maintenir haut pour tirer vers le haut)<br>1 / 2 / 3 : changer d\'arme<br>M : menu<br><br>Sur mobile : joystick pour se deplacer, et les boutons SAUT, TIR, ACCROUPI, armes et menu.',
+    idioma_sonido_tit: 'Langue et son', idioma: 'Langue', sonido: 'Son', sonido_on: 'Active', sonido_off: 'Coupe',
+    tienda_tit: 'Boutique', color_guantes: 'Gants', color_zapatillas: 'Chaussures', color_sombrero: 'Chapeau', sin_monedas: 'Pas assez de pieces',
+    completado_tit: 'Niveau termine', fin_partida_tit: 'Partie terminee',
+    volver_a_jugar: 'Rejouer', reiniciar_nivel: 'Recommencer le niveau', salir_al_mapa: 'Retour a la carte',
+    puntos: 'Score : ', monedas_lbl: 'Pieces : ', arma_lbl: 'Arme : ', bloqueada: '  (2 : verrouillee)',
+    arma_ballesta: 'Arbalete', arma_rayo: 'Rayon arcanique', arma_bola: 'Boule de feu',
+    puntuacion_final: 'Score : ', separador_monedas: ' | Pieces : ', toca_para_empezar: '(touchez ou appuyez sur une touche pour commencer)'
+  },
+  it: {
+    menu_titulo: 'Menu', tienda: 'Negozio', mapa_de_mundos: 'Mappa del mondo', controles_item: 'Controlli',
+    idioma_sonido_item: 'Lingua e audio', guardar_salir: 'Salva ed esci al menu', cerrar: 'Chiudi',
+    controles_tit: 'Controlli',
+    controles_lista: 'Frecce / A D: muoviti<br>Su / W: salta<br>Giu / S: accovacciati<br>Spazio: spara (tieni premuto su per sparare in alto)<br>1 / 2 / 3: cambia arma<br>M: menu<br><br>Su mobile: joystick per muoverti, e i pulsanti SALTO, SPARA, ACCOVAC, armi e menu.',
+    idioma_sonido_tit: 'Lingua e audio', idioma: 'Lingua', sonido: 'Audio', sonido_on: 'Attivo', sonido_off: 'Muto',
+    tienda_tit: 'Negozio', color_guantes: 'Guanti', color_zapatillas: 'Scarpe', color_sombrero: 'Cappello', sin_monedas: 'Monete insufficienti',
+    completado_tit: 'Livello completato', fin_partida_tit: 'Game over',
+    volver_a_jugar: 'Rigioca', reiniciar_nivel: 'Ricomincia livello', salir_al_mapa: 'Esci alla mappa',
+    puntos: 'Punti: ', monedas_lbl: 'Monete: ', arma_lbl: 'Arma: ', bloqueada: '  (2: bloccata)',
+    arma_ballesta: 'Balestra', arma_rayo: 'Raggio arcano', arma_bola: 'Palla di fuoco',
+    puntuacion_final: 'Punti: ', separador_monedas: ' | Monete: ', toca_para_empezar: '(tocca o premi un tasto per iniziare)'
+  }
+};
+
+let idiomaActual = localStorage.getItem('cripta_neon_idioma') || 'es';
+let sonidoActivado = localStorage.getItem('cripta_neon_sonido') !== 'no';
+
+function t(clave) { return (TRADUCCIONES[idiomaActual] && TRADUCCIONES[idiomaActual][clave]) || TRADUCCIONES.es[clave] || clave; }
+
+function cambiarIdioma(codigo) {
+  idiomaActual = codigo;
+  localStorage.setItem('cripta_neon_idioma', codigo);
+  aplicarIdioma();
+}
+
+function alternarSonido() {
+  sonidoActivado = !sonidoActivado;
+  localStorage.setItem('cripta_neon_sonido', sonidoActivado ? 'si' : 'no');
+  if (!sonidoActivado) detenerMusica();
+  else if (!nivelCompletado && !juegoTerminado) reproducirMusica(MELODIA_NIVEL);
+  aplicarIdioma();
+}
+
+function aplicarIdioma() {
+  document.getElementById('txt-intro-toca').textContent = t('toca_para_empezar');
+  document.getElementById('txt-menu-titulo').textContent = t('menu_titulo');
+  document.getElementById('txt-tienda').textContent = t('tienda');
+  document.getElementById('txt-mapa-de-mundos').textContent = t('mapa_de_mundos');
+  document.getElementById('txt-controles-item').textContent = t('controles_item');
+  document.getElementById('txt-idioma-sonido-item').textContent = t('idioma_sonido_item');
+  document.getElementById('txt-guardar-salir').textContent = t('guardar_salir');
+  document.getElementById('txt-controles-tit').textContent = t('controles_tit');
+  document.getElementById('txt-controles-lista').innerHTML = t('controles_lista');
+  document.getElementById('txt-idioma-sonido-tit').textContent = t('idioma_sonido_tit');
+  document.getElementById('txt-idioma-label').textContent = t('idioma');
+  document.getElementById('txt-sonido-label').textContent = t('sonido');
+  document.getElementById('btn-sonido').textContent = sonidoActivado ? t('sonido_on') : t('sonido_off');
+  document.getElementById('txt-tienda-tit').textContent = t('tienda_tit');
+  document.getElementById('txt-color-guantes').textContent = t('color_guantes');
+  document.getElementById('txt-color-zapatillas').textContent = t('color_zapatillas');
+  document.getElementById('txt-color-sombrero').textContent = t('color_sombrero');
+  document.getElementById('txt-completado-tit').textContent = t('completado_tit');
+  document.getElementById('txt-fin-partida-tit').textContent = t('fin_partida_tit');
+  document.getElementById('reiniciar').textContent = t('volver_a_jugar');
+  document.getElementById('reiniciar-nivel').textContent = t('reiniciar_nivel');
+  document.getElementById('salir-mapa').textContent = t('salir_al_mapa');
+  document.querySelectorAll('#menu-mapa .cerrar-overlay, #controles .cerrar-overlay, #idioma-sonido .cerrar-overlay, #tienda .cerrar-overlay').forEach((b) => { b.textContent = t('cerrar'); });
+  document.querySelectorAll('.btn-idioma').forEach((boton) => {
+    boton.classList.toggle('activo', boton.dataset.idioma === idiomaActual);
+  });
+  if (textoPuntuacion) textoPuntuacion.setText(t('puntos') + puntuacion);
+  if (textoMonedas) textoMonedas.setText(t('monedas_lbl') + monedas);
+  if (typeof actualizarTextoArma === 'function' && textoArma) actualizarTextoArma();
+}
+
+// ---- motor de audio sintetizado (sin archivos externos) ----
+let audioCtx = null;
+function obtenerAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+function tono(frecuencia, duracion, tipo, volumen, cuando) {
+  if (!sonidoActivado) return;
+  const ctx = obtenerAudioCtx();
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = tipo || 'square';
+  osc.frequency.value = frecuencia;
+  const inicio = ctx.currentTime + (cuando || 0);
+  gain.gain.setValueAtTime(0.0001, inicio);
+  gain.gain.linearRampToValueAtTime(volumen || 0.14, inicio + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.0001, inicio + duracion);
+  osc.connect(gain); gain.connect(ctx.destination);
+  osc.start(inicio); osc.stop(inicio + duracion + 0.03);
+}
+function ruido(duracion, volumen) {
+  if (!sonidoActivado) return;
+  const ctx = obtenerAudioCtx();
+  const buffer = ctx.createBuffer(1, ctx.sampleRate * duracion, ctx.sampleRate);
+  const datos = buffer.getChannelData(0);
+  for (let i = 0; i < datos.length; i++) datos[i] = (Math.random() * 2 - 1) * (1 - i / datos.length);
+  const fuente = ctx.createBufferSource();
+  fuente.buffer = buffer;
+  const gain = ctx.createGain();
+  gain.gain.value = volumen || 0.12;
+  fuente.connect(gain); gain.connect(ctx.destination);
+  fuente.start();
+}
+
+function sfxSalto() { tono(330, 0.12, 'square', 0.1); tono(520, 0.1, 'square', 0.08, 0.05); }
+function sfxDisparo() { tono(700, 0.07, 'square', 0.09); }
+function sfxMoneda() { tono(880, 0.08, 'triangle', 0.12); tono(1320, 0.1, 'triangle', 0.1, 0.06); }
+function sfxGolpe() { ruido(0.15, 0.15); tono(120, 0.15, 'sawtooth', 0.1); }
+function sfxEnemigoDerrotado() { tono(500, 0.08, 'square', 0.1); tono(300, 0.1, 'square', 0.09, 0.06); }
+function sfxMenu() { tono(600, 0.05, 'square', 0.07); }
+function sfxCompra() { tono(700, 0.06, 'triangle', 0.1); tono(1000, 0.08, 'triangle', 0.1, 0.05); tono(1300, 0.1, 'triangle', 0.1, 0.1); }
+function sfxNivelCompletado() {
+  [523, 659, 784, 1047].forEach((f, i) => tono(f, 0.22, 'triangle', 0.13, i * 0.14));
+}
+function sfxGameOver() {
+  [400, 340, 280, 200].forEach((f, i) => tono(f, 0.3, 'sawtooth', 0.1, i * 0.18));
+}
+
+const MELODIA_NIVEL = [
+  { f: 262, d: 0.18 }, { f: 330, d: 0.18 }, { f: 392, d: 0.18 }, { f: 523, d: 0.26 },
+  { f: 392, d: 0.18 }, { f: 440, d: 0.18 }, { f: 523, d: 0.18 }, { f: 659, d: 0.3 },
+  { f: 587, d: 0.18 }, { f: 523, d: 0.18 }, { f: 440, d: 0.18 }, { f: 392, d: 0.26 },
+  { f: 330, d: 0.18 }, { f: 392, d: 0.18 }, { f: 440, d: 0.18 }, { f: 523, d: 0.42 }
+];
+let musicaTimer = null;
+function reproducirMusica(notas) {
+  detenerMusica();
+  let i = 0;
+  const paso = () => {
+    if (!sonidoActivado) { musicaTimer = setTimeout(paso, 300); return; }
+    const nota = notas[i % notas.length];
+    tono(nota.f, nota.d * 0.85, 'triangle', 0.045);
+    i++;
+    musicaTimer = setTimeout(paso, nota.d * 1000);
+  };
+  paso();
+}
+function detenerMusica() { if (musicaTimer) clearTimeout(musicaTimer); musicaTimer = null; }
+function iniciarAudioConGesto() {
+  const arrancar = () => { obtenerAudioCtx(); if (sonidoActivado) reproducirMusica(MELODIA_NIVEL); quitarListeners(); };
+  const quitarListeners = () => {
+    window.removeEventListener('pointerdown', arrancar);
+    window.removeEventListener('keydown', arrancar);
+    window.removeEventListener('pointermove', arrancar);
+    window.removeEventListener('touchstart', arrancar);
+  };
+  window.addEventListener('pointerdown', arrancar);
+  window.addEventListener('keydown', arrancar);
+  window.addEventListener('pointermove', arrancar);
+  window.addEventListener('touchstart', arrancar);
+}
+
+const config = {
+  type: Phaser.AUTO,
+  width: VIEW_W,
+  height: VIEW_H,
+  parent: 'game-container',
+  backgroundColor: '#8fd3f4',
+  physics: { default: 'arcade', arcade: { gravity: { y: 900 }, debug: false } },
+  scene: { preload, create, update }
+};
+
+const juego = new Phaser.Game(config);
+juego.events.once('ready', () => {
+  if (juego.canvas) { juego.canvas.setAttribute('tabindex', '0'); juego.canvas.focus(); }
+});
+document.getElementById('game-container').addEventListener('pointerdown', () => {
+  if (juego.canvas) juego.canvas.focus();
+});
+
+function dibujarTexturasJugador(escena) {
+  const g = escena.add.graphics();
+  const forma = (dibujar, w, h, key) => { g.clear(); dibujar(); g.generateTexture(key, w, h); };
+
+  const cara = (cx, cy, r) => {
+    g.fillCircle(cx, cy, r);
+    g.fillStyle(COSMETICOS.colorMejillas, 1);
+    g.fillCircle(cx - 11, cy + 4, 4); g.fillCircle(cx + 11, cy + 4, 4);
+    g.fillStyle(0xffffff, 1);
+    g.fillCircle(cx - 6, cy - 3, 7); g.fillCircle(cx + 6, cy - 3, 7);
+    g.fillStyle(0x1b1230, 1);
+    g.fillCircle(cx - 5, cy - 2, 3.4); g.fillCircle(cx + 7, cy - 2, 3.4);
+    g.lineStyle(2.5, 0x1b1230, 1);
+    g.beginPath(); g.arc(cx, cy + 4, 6, 0.2, Math.PI - 0.2, false); g.strokePath();
+  };
+
+  const sombrero = (cx, cyCabeza, radioCabeza) => {
+    if (!COSMETICOS.sombrero) return;
+    const cyTope = Math.max(2, cyCabeza - radioCabeza + 4);
+    g.fillStyle(COSMETICOS.colorSombrero, 1);
+    g.fillEllipse(cx, cyTope, radioCabeza * 1.3, 9);
+    g.fillRect(cx - radioCabeza * 0.75, cyTope + 2, radioCabeza * 1.5, 3);
+  };
+
+  forma(() => {
+    g.fillStyle(COSMETICOS.colorCuerpo, 1); g.fillRoundedRect(4, 26, 26, 26, 10); cara(17, 20, 19);
+    g.fillStyle(COSMETICOS.colorGuantes, 1); g.fillCircle(4, 40, 7); g.fillCircle(30, 40, 7);
+    g.fillStyle(COSMETICOS.colorZapatillas, 1); g.fillRoundedRect(2, 48, 14, 8, 3); g.fillRoundedRect(18, 48, 14, 8, 3);
+    sombrero(17, 20, 19);
+  }, 34, 58, 'jugador_idle');
+
+  forma(() => {
+    g.fillStyle(COSMETICOS.colorCuerpo, 1); g.fillRoundedRect(6, 26, 26, 26, 10); cara(19, 20, 19);
+    g.fillStyle(COSMETICOS.colorGuantes, 1); g.fillCircle(4, 36, 7); g.fillCircle(32, 44, 7);
+    g.fillStyle(COSMETICOS.colorZapatillas, 1); g.fillRoundedRect(0, 46, 14, 8, 3); g.fillRoundedRect(20, 50, 14, 8, 3);
+    sombrero(19, 20, 19);
+  }, 34, 58, 'jugador_correr1');
+
+  forma(() => {
+    g.fillStyle(COSMETICOS.colorCuerpo, 1); g.fillRoundedRect(4, 26, 26, 26, 10); cara(17, 20, 19);
+    g.fillStyle(COSMETICOS.colorGuantes, 1); g.fillCircle(2, 44, 7); g.fillCircle(30, 36, 7);
+    g.fillStyle(COSMETICOS.colorZapatillas, 1); g.fillRoundedRect(2, 50, 14, 8, 3); g.fillRoundedRect(22, 46, 14, 8, 3);
+    sombrero(17, 20, 19);
+  }, 36, 58, 'jugador_correr2');
+
+  forma(() => {
+    g.fillStyle(COSMETICOS.colorCuerpo, 1); g.fillRoundedRect(4, 26, 26, 24, 10); cara(17, 20, 19);
+    g.fillStyle(COSMETICOS.colorGuantes, 1); g.fillCircle(2, 26, 7); g.fillCircle(32, 26, 7);
+    g.fillStyle(COSMETICOS.colorZapatillas, 1); g.fillRoundedRect(8, 46, 20, 8, 3);
+    sombrero(17, 20, 19);
+  }, 34, 58, 'jugador_salto');
+
+  forma(() => {
+    g.fillStyle(COSMETICOS.colorCuerpo, 1); g.fillRoundedRect(4, 26, 26, 26, 10); cara(17, 20, 19);
+    g.fillStyle(COSMETICOS.colorGuantes, 1); g.fillCircle(4, 40, 7); g.fillCircle(40, 34, 7);
+    g.fillStyle(PALETA.proyectilBase, 1); g.fillCircle(48, 34, 4);
+    g.fillStyle(COSMETICOS.colorZapatillas, 1); g.fillRoundedRect(2, 48, 14, 8, 3); g.fillRoundedRect(18, 48, 14, 8, 3);
+    sombrero(17, 20, 19);
+  }, 54, 58, 'jugador_disparo');
+
+  forma(() => {
+    g.fillStyle(COSMETICOS.colorCuerpo, 1); g.fillRoundedRect(4, 40, 26, 16, 8);
+    g.fillCircle(17, 34, 15);
+    g.fillStyle(COSMETICOS.colorMejillas, 1); g.fillCircle(8, 37, 3); g.fillCircle(26, 37, 3);
+    g.fillStyle(0xffffff, 1); g.fillCircle(12, 31, 5.5); g.fillCircle(22, 31, 5.5);
+    g.fillStyle(0x1b1230, 1); g.fillCircle(13, 32, 2.6); g.fillCircle(23, 32, 2.6);
+    g.lineStyle(2, 0x1b1230, 1); g.beginPath(); g.arc(17, 36, 5, 0.2, Math.PI - 0.2, false); g.strokePath();
+    g.fillStyle(COSMETICOS.colorGuantes, 1); g.fillCircle(2, 48, 6); g.fillCircle(32, 48, 6);
+    g.fillStyle(COSMETICOS.colorZapatillas, 1); g.fillRoundedRect(2, 52, 14, 6, 3); g.fillRoundedRect(18, 52, 14, 6, 3);
+    sombrero(17, 34, 15);
+  }, 34, 58, 'jugador_agachado');
+
+  g.destroy();
+}
+
+function preload() {
+  aplicarCosmeticosATextura();
+  const g = this.add.graphics();
+  const forma = (dibujar, w, h, key) => { g.clear(); dibujar(); g.generateTexture(key, w, h); };
+
+  dibujarTexturasJugador(this);
+
+  // jabali: cuerpo robusto, colmillos blancos, cerdas en el lomo
+  forma(() => {
+    g.fillStyle(PALETA.jabaliOscuro, 1);
+    for (let x = 4; x < 34; x += 6) g.fillTriangle(x, 8, x + 3, -4, x + 6, 8);
+    g.fillStyle(PALETA.jabali, 1); g.fillRoundedRect(0, 6, 40, 30, 10);
+    g.fillStyle(0x2a1c10, 1); g.fillCircle(10, 18, 3); g.fillCircle(28, 18, 3);
+    g.fillStyle(PALETA.jabaliColmillo, 1);
+    g.fillTriangle(4, 28, 10, 28, 5, 36); g.fillTriangle(30, 28, 36, 28, 35, 36);
+  }, 40, 38, 'jabali');
+
+  // abeja: cuerpo redondo a rayas con alas
+  forma(() => {
+    g.fillStyle(PALETA.abejaAla, 0.85);
+    g.fillEllipse(12, 8, 16, 10); g.fillEllipse(28, 8, 16, 10);
+    g.fillStyle(PALETA.abeja, 1); g.fillEllipse(20, 20, 26, 22);
+    g.fillStyle(PALETA.abejaFranja, 1);
+    g.fillRect(10, 10, 5, 20); g.fillRect(20, 10, 5, 20);
+    g.fillStyle(0xffffff, 1); g.fillCircle(15, 16, 4); g.fillCircle(25, 16, 4);
+    g.fillStyle(0x1b1230, 1); g.fillCircle(15, 16, 2); g.fillCircle(25, 16, 2);
+  }, 40, 34, 'abeja');
+
+  // erizo: cuerpo redondo con muchas puas y carita
+  forma(() => {
+    g.fillStyle(PALETA.erizoPua, 1);
+    for (let a = 0; a < 14; a++) {
+      const ang = (a / 14) * Math.PI * 1.5 - Math.PI * 0.75;
+      const cx = 21 + Math.cos(ang) * 16, cy = 21 + Math.sin(ang) * 16;
+      const px = 21 + Math.cos(ang) * 24, py = 21 + Math.sin(ang) * 24;
+      g.fillTriangle(cx - 2, cy, cx + 2, cy, px, py);
+    }
+    g.fillStyle(PALETA.erizo, 1); g.fillCircle(21, 21, 16);
+    g.fillStyle(PALETA.erizoPanza, 1); g.fillEllipse(21, 28, 20, 12);
+    g.fillStyle(0x1b1230, 1); g.fillCircle(15, 19, 2.4); g.fillCircle(27, 19, 2.4);
+    g.fillStyle(0x3a2a1a, 1); g.fillCircle(21, 24, 2);
+  }, 42, 42, 'erizo');
+
+  forma(() => {
+    g.fillStyle(PALETA.ranaOscuro, 1); g.fillEllipse(10, 30, 14, 10); g.fillEllipse(30, 30, 14, 10);
+    g.fillStyle(PALETA.rana, 1); g.fillEllipse(20, 24, 30, 20);
+    g.fillStyle(PALETA.ranaPanza, 1); g.fillEllipse(20, 30, 18, 10);
+    g.fillStyle(PALETA.rana, 1); g.fillCircle(10, 10, 8); g.fillCircle(30, 10, 8);
+    g.fillStyle(0xffffff, 1); g.fillCircle(10, 10, 5); g.fillCircle(30, 10, 5);
+    g.fillStyle(0x1b1230, 1); g.fillCircle(10, 10, 2.4); g.fillCircle(30, 10, 2.4);
+  }, 40, 40, 'rana');
+
+  forma(() => {
+    g.fillStyle(PALETA.ardillaCola, 1); g.fillEllipse(30, 14, 18, 24);
+    g.fillStyle(PALETA.ardillaClaro, 1); g.fillEllipse(30, 14, 12, 18);
+    g.fillStyle(PALETA.ardilla, 1); g.fillEllipse(14, 22, 22, 16);
+    g.fillCircle(8, 12, 9);
+    g.fillStyle(PALETA.ardillaClaro, 1); g.fillEllipse(14, 26, 14, 8);
+    g.fillStyle(PALETA.ardilla, 1); g.fillTriangle(3, 6, 7, -2, 11, 6); g.fillTriangle(9, 6, 13, -2, 17, 6);
+    g.fillStyle(0x1b1230, 1); g.fillCircle(5, 11, 2); g.fillCircle(12, 11, 2);
+  }, 40, 30, 'ardilla');
+
+  forma(() => {
+    g.fillStyle(PALETA.tierra, 1); g.fillRoundedRect(0, 6, 96, 22, 4);
+    g.fillStyle(PALETA.hierba, 1); g.fillRect(0, 0, 96, 12);
+    g.fillStyle(PALETA.hierbaOscura, 1);
+    for (let x = 6; x < 96; x += 16) g.fillTriangle(x, 8, x + 4, 0, x + 8, 8);
+  }, 96, 28, 'plataforma');
+
+  // suelo grueso: mismo aspecto por arriba pero con cuerpo solido hasta el fondo (sin fondo falso)
+  forma(() => {
+    g.fillStyle(PALETA.tierra, 1); g.fillRect(0, 0, 96, 140);
+    g.fillStyle(PALETA.hierba, 1); g.fillRect(0, 0, 96, 12);
+    g.fillStyle(PALETA.hierbaOscura, 1);
+    for (let x = 6; x < 96; x += 16) g.fillTriangle(x, 8, x + 4, 0, x + 8, 8);
+  }, 96, 140, 'suelo');
+
+  forma(() => { g.fillStyle(PALETA.proyectilBase, 1); g.fillCircle(6, 6, 6); }, 12, 12, 'proyectil_base');
+  forma(() => { g.fillStyle(PALETA.proyectilMejora, 1); g.fillCircle(8, 8, 8); }, 16, 16, 'proyectil_mejora');
+  forma(() => { g.fillStyle(PALETA.proyectilEspecial, 1); g.fillCircle(10, 10, 10); }, 20, 20, 'proyectil_especial');
+  forma(() => { g.fillStyle(PALETA.proyectilEnemigo, 1); g.fillTriangle(0, 5, 14, 7, 0, 9); }, 14, 14, 'proyectil_enemigo');
+
+  forma(() => {
+    g.fillStyle(PALETA.moneda, 1); g.fillCircle(9, 9, 9);
+    g.lineStyle(2, 0x8a6a1f, 1); g.strokeCircle(9, 9, 9);
+  }, 18, 18, 'moneda');
+
+  forma(() => {
+    g.fillStyle(PALETA.pickup, 1); g.fillCircle(12, 12, 12);
+    g.lineStyle(2, 0xffffff, 0.6); g.strokeCircle(12, 12, 12);
+  }, 24, 24, 'pickup');
+
+  const corazon = (relleno) => {
+    g.clear();
+    g.fillStyle(relleno ? 0xff5a5a : 0xcccccc, 1);
+    g.fillCircle(6, 7, 6); g.fillCircle(14, 7, 6);
+    g.fillTriangle(1, 9, 19, 9, 10, 20);
+  };
+  corazon(true); g.generateTexture('corazon_lleno', 20, 20);
+  corazon(false); g.generateTexture('corazon_vacio', 20, 20);
+
+  forma(() => {
+    g.fillStyle(0xffd76a, 1); g.fillCircle(30, 30, 30);
+    g.fillStyle(0xfff6d8, 1); g.fillCircle(30, 30, 20);
+    g.lineStyle(3, 0xffd76a, 1); g.strokeCircle(30, 30, 26);
+  }, 60, 60, 'portal');
+
+  // cofre de madera con cierre dorado
+  forma(() => {
+    g.fillStyle(0x6b4a2c, 1); g.fillRoundedRect(0, 10, 34, 22, 4);
+    g.fillStyle(0x8a6339, 1); g.fillRoundedRect(0, 0, 34, 14, 4);
+    g.fillStyle(0xe8c848, 1); g.fillRect(14, 8, 6, 16);
+    g.fillStyle(0x4a3018, 1); g.fillRect(0, 12, 34, 2); g.fillRect(0, 22, 34, 2);
+  }, 34, 32, 'cofre');
+
+  // pinchos afilados sobre base de piedra
+  forma(() => {
+    g.fillStyle(0x7a7a7a, 1); g.fillRect(0, 20, 32, 8);
+    g.fillStyle(0xd8d8d8, 1);
+    for (let x = 2; x < 32; x += 8) g.fillTriangle(x, 20, x + 4, 4, x + 8, 20);
+  }, 32, 28, 'pinchos');
+
+  // plataforma flotante con marca distinta (para las moviles)
+  forma(() => {
+    g.fillStyle(PALETA.tierra, 1); g.fillRoundedRect(0, 6, 96, 22, 4);
+    g.fillStyle(0x8fd0e0, 1); g.fillRect(0, 0, 96, 12);
+    g.fillStyle(0x5fa8bf, 1);
+    for (let x = 6; x < 96; x += 16) g.fillTriangle(x, 8, x + 4, 0, x + 8, 8);
+  }, 96, 28, 'plataforma_movil');
+
+  g.destroy();
+}
+
+function create() {
+  escenaActiva = this;
+
+  const guardado = leerGuardado();
+  if (guardado.monedas !== undefined) monedas = guardado.monedas;
+  // los corazones NO se cargan del guardado: cada nivel empieza siempre a maximo
+  if (guardado.arma) armaActual = guardado.arma;
+  if (guardado.secundariaDesbloqueada) secundariaDesbloqueada = true;
+  if (guardado.cargasEspecial !== undefined) cargasEspecial = guardado.cargasEspecial;
+
+  this.physics.world.setBounds(0, 0, WORLD_W, WORLD_H);
+
+  const fondo = this.add.graphics();
+  fondo.fillStyle(PALETA.sol, 1); fondo.fillCircle(3400, 100, 50);
+  fondo.fillStyle(0xfff3b0, 0.6); fondo.fillCircle(3400, 100, 66);
+  fondo.fillStyle(PALETA.nube, 0.9);
+  [[200, 90], [420, 130], [900, 80], [1300, 120], [1750, 90], [2200, 110], [2650, 80], [3100, 130]].forEach(([x, y]) => {
+    fondo.fillEllipse(x, y, 70, 26); fondo.fillEllipse(x + 34, y - 10, 46, 22); fondo.fillEllipse(x - 30, y + 4, 46, 20);
+  });
+  fondo.fillStyle(PALETA.colinaLejos, 1);
+  for (let x = 0; x < WORLD_W; x += 400) fondo.fillEllipse(x + 150, 760, 320, 140);
+  fondo.fillStyle(PALETA.colinaCerca, 1);
+  for (let x = 0; x < WORLD_W; x += 300) fondo.fillEllipse(x, 800, 260, 110);
+  fondo.fillStyle(PALETA.arbusto, 1);
+  for (let x = 30; x < WORLD_W; x += 180) {
+    if ((x > 660 && x < 840) || (x > 1360 && x < 1690) || (x > 2160 && x < 2340)) continue;
+    fondo.fillCircle(x, 826, 16); fondo.fillCircle(x + 16, 830, 13); fondo.fillCircle(x - 14, 830, 12);
+  }
+  plataformas = this.physics.add.staticGroup();
+  const crearSuelo = (xIni, xFin) => { for (let x = xIni; x + 96 <= xFin; x += 96) plataformas.create(x + 48, 916, 'suelo'); };
+  crearSuelo(0, 700);
+  crearSuelo(800, 1400);
+  crearSuelo(1650, 2200);
+  crearSuelo(2300, 3600);
+  [[750, 760], [1900, 700], [2050, 620], [2550, 760]].forEach(([x, y]) => plataformas.create(x, y, 'plataforma'));
+  [[880, 820], [950, 760], [1050, 660], [950, 560], [1050, 460]].forEach(([x, y]) => plataformas.create(x, y, 'plataforma'));
+
+  // pinchos: peligro en el suelo, danan al tocarlos
+  pinchosGrupo = this.physics.add.staticGroup();
+  [1020, 2400].forEach((x) => pinchosGrupo.create(x, 832, 'pinchos'));
+
+  // cofres: se rompen de un disparo y sueltan monedas
+  cofresGrupo = this.physics.add.staticGroup();
+  [1250, 1830, 2900].forEach((x) => cofresGrupo.create(x, 830, 'cofre'));
+
+  // plataformas moviles: una horizontal cruzando el hueco grande, otra vertical mas adelante
+  plataformasMoviles = this.physics.add.group();
+  const pm1 = plataformasMoviles.create(1420, 820, 'plataforma_movil');
+  pm1.body.allowGravity = false; pm1.setImmovable(true);
+  pm1.eje = 'x'; pm1.minPos = 1420; pm1.maxPos = 1630; pm1.vel = 70; pm1.dir = 1;
+  pm1.prevX = pm1.x; pm1.prevY = pm1.y;
+
+  const pm2 = plataformasMoviles.create(2450, 900, 'plataforma_movil');
+  pm2.body.allowGravity = false; pm2.setImmovable(true);
+  pm2.eje = 'y'; pm2.minPos = 550; pm2.maxPos = 830; pm2.vel = 60; pm2.dir = -1;
+  pm2.prevX = pm2.x; pm2.prevY = pm2.y;
+
+  jugador = this.physics.add.sprite(60, 700, 'jugador_idle');
+  jugador.setBounce(0.05);
+  jugador.setCollideWorldBounds(true);
+  jugador.body.setSize(30, 40).setOffset(2, 18);
+  this.physics.add.collider(jugador, plataformas);
+  this.physics.add.collider(jugador, plataformasMoviles);
+  this.physics.add.collider(jugador, cofresGrupo);
+
+  this.cameras.main.setBounds(0, 0, WORLD_W, WORLD_H);
+  this.cameras.main.startFollow(jugador, true, 0.08, 0.08);
+
+  gruposEnemigos = this.physics.add.group();
+  crearEnemigo(this, 'jabali', 500, 780, { limIzq: 400, limDer: 650 });
+  crearEnemigo(this, 'ardilla', 1050, 780, { limIzq: 850, limDer: 1350 });
+  crearEnemigo(this, 'jabali', 2750, 780, { limIzq: 2350, limDer: 3100 });
+  crearEnemigo(this, 'abeja', 1800, 500, { baseY: 500, amplitud: 70 });
+  crearEnemigo(this, 'abeja', 3000, 450, { baseY: 450, amplitud: 60 });
+  crearEnemigo(this, 'erizo', 1950, 822, { limIzq: 1900, limDer: 2100 });
+  crearEnemigo(this, 'erizo', 3300, 822, { limIzq: 3250, limDer: 3450 });
+  crearEnemigo(this, 'rana', 2500, 780, { limIzq: 2350, limDer: 3450 });
+  this.physics.add.collider(gruposEnemigos, plataformas);
+  this.physics.add.collider(gruposEnemigos, plataformasMoviles);
+
+  portalFinal = this.physics.add.staticSprite(3520, 800, 'portal');
+  this.tweens.add({ targets: portalFinal, scale: 1.08, duration: 600, yoyo: true, repeat: -1 });
+
+  proyectiles = this.physics.add.group();
+  proyectilesEnemigos = this.physics.add.group();
+  monedasGrupo = this.physics.add.group();
+  this.physics.add.collider(monedasGrupo, plataformas);
+
+  this.physics.add.overlap(jugador, gruposEnemigos, colisionEnemigo, null, this);
+  this.physics.add.overlap(proyectiles, gruposEnemigos, golpearEnemigo, null, this);
+  this.physics.add.overlap(proyectiles, cofresGrupo, romperCofre, null, this);
+  this.physics.add.overlap(jugador, proyectilesEnemigos, golpeadoPorProyectil, null, this);
+  this.physics.add.overlap(jugador, pinchosGrupo, tocarPinchos, null, this);
+  this.physics.add.overlap(jugador, monedasGrupo, recogerMoneda, null, this);
+  this.physics.add.overlap(jugador, portalFinal, completarNivel, null, this);
+
+  cursores = this.input.keyboard.createCursorKeys();
+  ['SPACE', 'W', 'A', 'D', 'S', 'M', 'ONE', 'TWO', 'THREE'].forEach((k) => {
+    teclas[k] = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes[k]);
+  });
+
+  textoPuntuacion = this.add.text(16, 12, 'Puntos: 0', { fontSize: '16px', color: '#2c3b2e' }).setScrollFactor(0);
+  textoMonedas = this.add.text(16, 34, 'Monedas: 0', { fontSize: '16px', color: '#8a6a1f' }).setScrollFactor(0);
+  textoArma = this.add.text(16, 56, '', { fontSize: '14px', color: '#2c6b3a' }).setScrollFactor(0);
+  actualizarTextoArma();
+
+  for (let i = 0; i < corazonesMax; i++) {
+    iconosCorazon.push(this.add.image(760 - i * 24, 20, 'corazon_lleno').setScrollFactor(0));
+  }
+  actualizarCorazones();
+  textoMonedas.setText('Monedas: ' + monedas);
+
+  textoAvisoFondo = this.add.rectangle(VIEW_W / 2, 90, 420, 40, 0x1a1410, 0.8).setScrollFactor(0).setVisible(false);
+  textoAviso = this.add.text(VIEW_W / 2, 90, '', { fontSize: '14px', color: '#ffffff' }).setOrigin(0.5).setScrollFactor(0).setVisible(false);
+
+  document.getElementById('abrir-tienda-desde-menu').onclick = abrirTiendaDesdeMenu;
+  document.getElementById('ir-al-mapa').onclick = () => { window.location.href = 'mapa_mundos_v28.html'; };
+  document.getElementById('ver-controles').onclick = () => {
+    document.getElementById('menu-mapa').style.display = 'none';
+    document.getElementById('controles').style.display = 'flex';
+  };
+  document.getElementById('cerrar-controles').onclick = () => {
+    document.getElementById('controles').style.display = 'none';
+    document.getElementById('menu-mapa').style.display = 'flex';
+  };
+  document.getElementById('ver-idioma-sonido').onclick = () => {
+    document.getElementById('menu-mapa').style.display = 'none';
+    document.getElementById('idioma-sonido').style.display = 'flex';
+  };
+  document.getElementById('cerrar-idioma-sonido').onclick = () => {
+    document.getElementById('idioma-sonido').style.display = 'none';
+    document.getElementById('menu-mapa').style.display = 'flex';
+  };
+  document.querySelectorAll('#idioma-sonido .btn-idioma').forEach((boton) => {
+    boton.onclick = () => cambiarIdioma(boton.dataset.idioma);
+  });
+  document.getElementById('btn-sonido').onclick = alternarSonido;
+  document.getElementById('guardar-salir-inicio').onclick = () => {
+    guardarProgresoNivel();
+    window.location.href = 'inicio.html';
+  };
+  document.getElementById('cerrar-menu').onclick = cerrarMenu;
+  document.getElementById('cerrar-tienda').onclick = cerrarTienda;
+  document.getElementById('reiniciar').onclick = () => location.reload();
+  document.getElementById('reiniciar-nivel').onclick = () => location.reload();
+  document.getElementById('salir-mapa').onclick = () => { window.location.href = 'mapa_mundos_v28.html'; };
+
+  aplicarIdioma();
+  configurarControlesTactiles();
+  iniciarAudioConGesto();
+  mostrarIntroNivel();
+}
+
+function mostrarIntroNivel() {
+  document.getElementById('txt-intro-monedas').textContent = t('monedas_lbl') + monedas;
+  escenaActiva.scene.pause();
+  const ocultarIntro = () => {
+    if (!introActiva) return;
+    introActiva = false;
+    window.removeEventListener('pointerdown', ocultarIntro);
+    window.removeEventListener('keydown', ocultarIntro);
+    const cortina = document.getElementById('intro-nivel');
+    cortina.style.opacity = '0';
+    setTimeout(() => {
+      cortina.style.display = 'none';
+      cortina.style.opacity = '1';
+      escenaActiva.scene.resume();
+    }, 500);
+  };
+  window.addEventListener('pointerdown', ocultarIntro);
+  window.addEventListener('keydown', ocultarIntro);
+}
+
+function configurarControlesTactiles() {
+  const esTactil = ('ontouchstart' in window) || navigator.maxTouchPoints > 0 || window.matchMedia('(pointer: coarse)').matches;
+  if (!esTactil) return;
+  document.getElementById('controles-tactiles').style.display = 'block';
+
+  const base = document.getElementById('joystick-base');
+  const nudo = document.getElementById('joystick-nudo');
+  const radio = 40;
+  let joystickId = null;
+
+  const moverNudo = (dx, dy) => {
+    const dist = Math.min(radio, Math.hypot(dx, dy));
+    const ang = Math.atan2(dy, dx);
+    nudo.style.left = (30 + Math.cos(ang) * dist) + 'px';
+    nudo.style.top = (30 + Math.sin(ang) * dist) + 'px';
+  };
+  const restablecerNudo = () => { nudo.style.left = '30px'; nudo.style.top = '30px'; };
+
+  const actualizarDireccion = (dx, dy) => {
+    tactil.izquierda = dx < -14;
+    tactil.derecha = dx > 14;
+    tactil.abajo = dy > 20;
+  };
+
+  base.addEventListener('pointerdown', (e) => {
+    joystickId = e.pointerId;
+    base.setPointerCapture(joystickId);
+  });
+  base.addEventListener('pointermove', (e) => {
+    if (e.pointerId !== joystickId) return;
+    const rect = base.getBoundingClientRect();
+    const dx = e.clientX - (rect.left + rect.width / 2);
+    const dy = e.clientY - (rect.top + rect.height / 2);
+    moverNudo(dx, dy);
+    actualizarDireccion(dx, dy);
+  });
+  const soltarJoystick = (e) => {
+    if (e.pointerId !== joystickId) return;
+    joystickId = null;
+    restablecerNudo();
+    tactil.izquierda = false; tactil.derecha = false; tactil.abajo = false;
+  };
+  base.addEventListener('pointerup', soltarJoystick);
+  base.addEventListener('pointercancel', soltarJoystick);
+
+  const botonMomentaneo = (id, propiedad) => {
+    const el = document.getElementById(id);
+    el.addEventListener('pointerdown', (e) => { e.preventDefault(); tactil[propiedad] = true; });
+    el.addEventListener('pointerup', () => { tactil[propiedad] = false; });
+    el.addEventListener('pointercancel', () => { tactil[propiedad] = false; });
+    el.addEventListener('pointerleave', () => { tactil[propiedad] = false; });
+  };
+  botonMomentaneo('btn-saltar', 'arriba');
+  botonMomentaneo('btn-agachar', 'abajo');
+
+  document.getElementById('btn-disparar').addEventListener('pointerdown', (e) => { e.preventDefault(); tactil.dispararPulsado = true; });
+  document.getElementById('btn-arma1').addEventListener('pointerdown', () => cambiarArma('principal'));
+  document.getElementById('btn-arma2').addEventListener('pointerdown', () => cambiarArma('secundaria'));
+  document.getElementById('btn-arma3').addEventListener('pointerdown', () => cambiarArma('especial'));
+  document.getElementById('btn-menu').addEventListener('pointerdown', () => {
+    if (!juegoTerminado && !nivelCompletado && !tiendaAbierta && !menuAbierto) abrirMenu();
+  });
+}
+
+function leerGuardado() {
+  try { return JSON.parse(localStorage.getItem('cripta_neon_guardado')) || {}; } catch (e) { return {}; }
+}
+
+function guardarProgresoNivel(nivelCompletadoNum) {
+  const datos = leerGuardado();
+  datos.mundo = 1;
+  datos.monedas = monedas;
+  datos.corazones = corazonesActuales;
+  datos.arma = armaActual;
+  datos.secundariaDesbloqueada = secundariaDesbloqueada;
+  datos.cargasEspecial = cargasEspecial;
+  if (!datos.mundosDesbloqueados) datos.mundosDesbloqueados = [];
+  if (datos.mundosDesbloqueados.indexOf(1) === -1) datos.mundosDesbloqueados.push(1);
+  if (!datos.nivelesCompletados) datos.nivelesCompletados = [];
+  if (nivelCompletadoNum && datos.nivelesCompletados.indexOf(nivelCompletadoNum) === -1) {
+    datos.nivelesCompletados.push(nivelCompletadoNum);
+  }
+  localStorage.setItem('cripta_neon_guardado', JSON.stringify(datos));
+}
+
+function crearEnemigo(escena, tipo, x, y, extra) {
+  const e = gruposEnemigos.create(x, y, tipo);
+  e.tipo = tipo;
+  Object.assign(e, extra);
+  if (tipo === 'jabali') {
+    e.hp = 1; e.dano = 1; e.monedasDrop = 1;
+    e.setCollideWorldBounds(true);
+    e.setVelocityX(60);
+  } else if (tipo === 'abeja') {
+    e.hp = 2; e.dano = 1; e.monedasDrop = 2;
+    e.body.allowGravity = false;
+    e.origenT = Math.random() * 1000;
+  } else if (tipo === 'erizo') {
+    e.hp = 2; e.dano = 1; e.monedasDrop = 2;
+    e.body.allowGravity = false;
+    e.setImmovable(true);
+    e.proxDisparo = 0;
+    e.setVelocityX(30);
+  } else if (tipo === 'rana') {
+    e.hp = 1; e.dano = 1; e.monedasDrop = 1;
+    e.setCollideWorldBounds(true);
+    e.proxSalto = 0;
+  } else if (tipo === 'ardilla') {
+    e.hp = 1; e.dano = 1; e.monedasDrop = 1;
+    e.setCollideWorldBounds(true);
+    e.setVelocityX(110);
+  }
+}
+
+function update(time) {
+  if (juegoTerminado || nivelCompletado || tiendaAbierta || menuAbierto || introActiva) return;
+
+  if (jugador.y > Y_MUERTE_POR_CAIDA) {
+    morir();
+    return;
+  }
+
+  const izquierda = cursores.left.isDown || teclas.A.isDown || tactil.izquierda;
+  const derecha = cursores.right.isDown || teclas.D.isDown || tactil.derecha;
+  const arriba = cursores.up.isDown || teclas.W.isDown || tactil.arriba;
+  const abajo = cursores.down.isDown || teclas.S.isDown || tactil.abajo;
+  const enSuelo = jugador.body.touching.down;
+
+  agachado = abajo && enSuelo;
+  if (agachado) {
+    jugador.body.setSize(30, 26).setOffset(2, 32);
+    jugador.setVelocityX(0);
+  } else {
+    jugador.body.setSize(30, 40).setOffset(2, 18);
+    if (izquierda) { jugador.setVelocityX(-190); mirandoDerecha = false; }
+    else if (derecha) { jugador.setVelocityX(190); mirandoDerecha = true; }
+    else jugador.setVelocityX(0);
+    if (arriba && enSuelo) { jugador.setVelocityY(-430); sfxSalto(); }
+  }
+
+  if ((Phaser.Input.Keyboard.JustDown(teclas.SPACE) || tactil.dispararPulsado) && !agachado) {
+    disparar(time, arriba);
+    finAnimDisparo = time + 160;
+  }
+  tactil.dispararPulsado = false;
+  if (Phaser.Input.Keyboard.JustDown(teclas.ONE)) cambiarArma('principal');
+  if (Phaser.Input.Keyboard.JustDown(teclas.TWO)) cambiarArma('secundaria');
+  if (Phaser.Input.Keyboard.JustDown(teclas.THREE)) cambiarArma('especial');
+  if (Phaser.Input.Keyboard.JustDown(teclas.M)) abrirMenu();
+
+  actualizarPose(time, enSuelo, izquierda || derecha);
+  jugador.setFlipX(!mirandoDerecha);
+
+  gruposEnemigos.children.iterate((e) => {
+    if (!e || !e.active) return;
+    const distancia = Phaser.Math.Distance.Between(e.x, e.y, jugador.x, jugador.y);
+    if (e.tipo === 'jabali') {
+      if (distancia < 260) {
+        let dirCarga = jugador.x < e.x ? -1 : 1;
+        if (e.x <= e.limIzq) dirCarga = 1;
+        else if (e.x >= e.limDer) dirCarga = -1;
+        e.setVelocityX(dirCarga * 150);
+      } else {
+        if (e.x <= e.limIzq) e.setVelocityX(60);
+        if (e.x >= e.limDer) e.setVelocityX(-60);
+      }
+    } else if (e.tipo === 'abeja') {
+      e.baseY += (jugador.y - e.baseY) * 0.01;
+      e.baseY = Phaser.Math.Clamp(e.baseY, 220, 700);
+      e.y = e.baseY + Math.sin((time + e.origenT) / 300) * e.amplitud;
+      e.setVelocityX(e.x > jugador.x ? -80 : 80);
+    } else if (e.tipo === 'erizo') {
+      if (e.x <= e.limIzq) e.setVelocityX(30);
+      if (e.x >= e.limDer) e.setVelocityX(-30);
+      const cadencia = distancia < 300 ? 900 : 1700;
+      if (time > e.proxDisparo) {
+        e.proxDisparo = time + cadencia;
+        const dir = jugador.x < e.x ? -1 : 1;
+        const p = proyectilesEnemigos.create(e.x, e.y, 'proyectil_enemigo');
+        p.body.allowGravity = false;
+        p.setVelocityX(dir * 280);
+      }
+    } else if (e.tipo === 'rana') {
+      if (e.body.touching.down && time > e.proxSalto) {
+        e.proxSalto = time + 900 + Math.random() * 400;
+        e.setVelocityY(-320);
+        let dir = jugador.x < e.x ? -1 : 1;
+        if (e.x <= e.limIzq) dir = 1;
+        else if (e.x >= e.limDer) dir = -1;
+        e.setVelocityX(dir * 90);
+      }
+    } else if (e.tipo === 'ardilla') {
+      if (e.x <= e.limIzq) e.setVelocityX(110);
+      if (e.x >= e.limDer) e.setVelocityX(-110);
+    }
+  });
+
+  [proyectiles, proyectilesEnemigos].forEach((grupo) => {
+    grupo.children.iterate((p) => {
+      if (p && (p.x < -20 || p.x > WORLD_W + 20 || p.y < -20 || p.y > WORLD_H + 20)) p.destroy();
+    });
+  });
+
+  monedasGrupo.children.iterate((m) => {
+    if (!m || !m.active) return;
+    const edad = time - m.spawnTime;
+    if (edad > 5000) { m.destroy(); return; }
+    if (edad > 3000) m.setAlpha(Math.floor(edad / 150) % 2 === 0 ? 1 : 0.15);
+  });
+
+  actualizarPlataformasMoviles();
+}
+
+function actualizarPlataformasMoviles() {
+  plataformasMoviles.children.iterate((p) => {
+    if (!p) return;
+    if (p.eje === 'x') {
+      p.x += p.vel * p.dir * (1 / 60);
+      if (p.x >= p.maxPos) { p.x = p.maxPos; p.dir = -1; }
+      if (p.x <= p.minPos) { p.x = p.minPos; p.dir = 1; }
+      p.body.updateFromGameObject();
+    } else {
+      p.y += p.vel * p.dir * (1 / 60);
+      if (p.y >= p.maxPos) { p.y = p.maxPos; p.dir = -1; }
+      if (p.y <= p.minPos) { p.y = p.minPos; p.dir = 1; }
+      p.body.updateFromGameObject();
+    }
+    const deltaX = p.x - p.prevX, deltaY = p.y - p.prevY;
+    const encimaDeLaPlataforma = jugador.body.touching.down &&
+      Math.abs((jugador.y + 29) - (p.y - 14)) < 10 &&
+      jugador.x + 15 > p.x - 48 && jugador.x - 15 < p.x + 48;
+    if (encimaDeLaPlataforma) { jugador.x += deltaX; jugador.y += deltaY; }
+    p.prevX = p.x; p.prevY = p.y;
+  });
+}
+
+function tocarPinchos() {
+  recibirDanio(1);
+}
+
+function romperCofre(proyectil, cofre) {
+  proyectil.destroy();
+  const x = cofre.x, y = cofre.y;
+  cofre.destroy();
+  sfxEnemigoDerrotado();
+  for (let i = 0; i < 3; i++) {
+    const m = monedasGrupo.create(x + i * 12 - 12, y - 6, 'moneda');
+    m.spawnTime = escenaActiva.time.now;
+    m.setBounce(0.3);
+  }
+}
+
+function actualizarPose(time, enSuelo, moviendose) {
+  let nuevaPose;
+  if (agachado) nuevaPose = 'jugador_agachado';
+  else if (time < finAnimDisparo) nuevaPose = 'jugador_disparo';
+  else if (!enSuelo) nuevaPose = 'jugador_salto';
+  else if (moviendose) nuevaPose = (Math.floor(time / 140) % 2 === 0) ? 'jugador_correr1' : 'jugador_correr2';
+  else nuevaPose = 'jugador_idle';
+
+  if (nuevaPose !== poseActual) {
+    poseActual = nuevaPose;
+    jugador.setTexture(nuevaPose);
+  }
+}
+
+function cambiarArma(clave) {
+  if (clave === 'secundaria' && !secundariaDesbloqueada) return;
+  if (clave === 'especial' && cargasEspecial <= 0) return;
+  armaActual = clave;
+  actualizarTextoArma();
+}
+
+function actualizarTextoArma() {
+  const nombresArma = { principal: t('arma_ballesta'), secundaria: t('arma_rayo'), especial: t('arma_bola') };
+  let extra = '';
+  if (armaActual === 'especial') extra = ' [' + cargasEspecial + '/' + cargasEspecialMax + ']';
+  const bloqueada = !secundariaDesbloqueada ? t('bloqueada') : '';
+  textoArma.setText(t('arma_lbl') + nombresArma[armaActual] + extra + bloqueada);
+}
+
+function disparar(time, haciaArriba) {
+  if (armaActual === 'especial' && cargasEspecial <= 0) { cambiarArma('principal'); return; }
+  const arma = ARMAS[armaActual];
+  if (time - ultimoDisparo < arma.cadencia) return;
+  ultimoDisparo = time;
+  sfxDisparo();
+
+  let x = jugador.x, y = jugador.y, vx = 0, vy = 0;
+  if (haciaArriba) { y -= 24; vy = -arma.velocidad; }
+  else { x += mirandoDerecha ? 20 : -20; vx = mirandoDerecha ? arma.velocidad : -arma.velocidad; }
+
+  const p = proyectiles.create(x, y, arma.textura);
+  p.body.allowGravity = false;
+  p.setVelocity(vx, vy);
+  p.dano = arma.dano;
+
+  if (armaActual === 'especial') {
+    cargasEspecial -= 1;
+    actualizarTextoArma();
+    if (cargasEspecial <= 0) cambiarArma('principal');
+  }
+}
+
+function colisionEnemigo(jug, enemigo) {
+  const cayendoEncima = jug.body.velocity.y > 0 && (jug.y + jug.height / 2) < (enemigo.y - enemigo.height / 4);
+  if (cayendoEncima) {
+    eliminarEnemigo(enemigo);
+    jug.setVelocityY(-260);
+  } else {
+    recibirDanio(enemigo.dano || 1);
+  }
+}
+
+function golpearEnemigo(proyectil, enemigo) {
+  const dano = proyectil.dano || 1;
+  proyectil.destroy();
+  enemigo.hp -= dano;
+  if (enemigo.hp <= 0) {
+    eliminarEnemigo(enemigo);
+  } else {
+    enemigo.setTint(0xffffff);
+    escenaActiva.time.delayedCall(100, () => enemigo.clearTint && enemigo.clearTint());
+  }
+}
+
+function eliminarEnemigo(enemigo) {
+  const x = enemigo.x, y = enemigo.y, drop = enemigo.monedasDrop || 1;
+  enemigo.disableBody(true, true);
+  sumarPuntos(30);
+  sfxEnemigoDerrotado();
+  for (let i = 0; i < drop; i++) {
+    const m = monedasGrupo.create(x + i * 14 - 7, y, 'moneda');
+    m.spawnTime = escenaActiva.time.now;
+    m.setBounce(0.2);
+  }
+}
+
+function golpeadoPorProyectil(jug, proyectil) {
+  proyectil.destroy();
+  recibirDanio(1);
+}
+
+function recogerMejora(jug, orbe) {
+  orbe.disableBody(true, true);
+  secundariaDesbloqueada = true;
+  actualizarTextoArma();
+  sumarPuntos(20);
+  sfxCompra();
+}
+
+function recogerMoneda(jug, m) {
+  m.destroy();
+  monedas += 1;
+  textoMonedas.setText(t('monedas_lbl') + monedas);
+  sfxMoneda();
+}
+
+function sumarPuntos(n) { puntuacion += n; textoPuntuacion.setText(t('puntos') + puntuacion); }
+
+function mostrarAviso(mensaje) {
+  textoAviso.setText(mensaje);
+  textoAviso.setVisible(true);
+  textoAvisoFondo.setVisible(true);
+  escenaActiva.time.delayedCall(1800, () => {
+    textoAviso.setVisible(false);
+    textoAvisoFondo.setVisible(false);
+  });
+}
+
+function completarNivel() {
+  if (nivelCompletado) return;
+  nivelCompletado = true;
+  guardarProgresoNivel(2);
+  detenerMusica();
+  sfxNivelCompletado();
+  jugador.setVelocity(0, 0);
+  jugador.body.moves = false;
+  escenaActiva.tweens.add({
+    targets: jugador, alpha: 0, scale: 0.3, duration: 700, ease: 'Cubic.easeIn',
+    onComplete: () => {
+      document.getElementById('puntuacion-final').textContent = t('puntuacion_final') + puntuacion + t('separador_monedas') + monedas;
+      document.getElementById('completado').style.display = 'flex';
+    }
+  });
+}
+
+function recibirDanio(cantidad) {
+  if (invulnerable) return;
+  corazonesActuales = Math.max(0, corazonesActuales - cantidad);
+  actualizarCorazones();
+  invulnerable = true;
+  jugador.setTint(0xff5a5a);
+  sfxGolpe();
+  escenaActiva.time.delayedCall(900, () => { invulnerable = false; jugador.clearTint(); });
+
+  if (corazonesActuales <= 0) {
+    morir();
+  }
+}
+
+function morir() {
+  if (juegoTerminado) return;
+  juegoTerminado = true;
+  detenerMusica();
+  sfxGameOver();
+  jugador.setVelocity(0, 0);
+  jugador.body.moves = false;
+  escenaActiva.tweens.add({
+    targets: jugador, alpha: 0, duration: 800, ease: 'Cubic.easeIn',
+    onComplete: () => {
+      document.getElementById('puntuacion-fin').textContent = t('puntuacion_final') + puntuacion + t('separador_monedas') + monedas;
+      document.getElementById('fin-partida').style.display = 'flex';
+    }
+  });
+}
+
+function actualizarCorazones() {
+  for (let i = 0; i < corazonesMax; i++) {
+    iconosCorazon[i].setTexture(i < corazonesActuales ? 'corazon_lleno' : 'corazon_vacio');
+  }
+}
+
+function abrirMenu() {
+  if (tiendaAbierta) return;
+  origenMenu = 'juego';
+  menuAbierto = true;
+  escenaActiva.scene.pause();
+  sfxMenu();
+  document.getElementById('menu-mapa').style.display = 'flex';
+}
+
+function cerrarMenu() {
+  menuAbierto = false;
+  sfxMenu();
+  document.getElementById('menu-mapa').style.display = 'none';
+  if (origenMenu === 'finPartida') {
+    document.getElementById('fin-partida').style.display = 'flex';
+  } else {
+    escenaActiva.scene.resume();
+  }
+}
+
+function abrirTiendaDesdeMenu() {
+  document.getElementById('menu-mapa').style.display = 'none';
+  tiendaAbierta = true;
+  menuAbierto = false;
+  sfxMenu();
+  document.getElementById('tienda').style.display = 'flex';
+  document.getElementById('monedas-tienda').textContent = t('monedas_lbl') + monedas;
+  actualizarFilasColores();
+}
+
+function cerrarTienda() {
+  tiendaAbierta = false;
+  sfxMenu();
+  document.getElementById('tienda').style.display = 'none';
+  if (origenMenu === 'finPartida') {
+    document.getElementById('fin-partida').style.display = 'flex';
+  } else {
+    escenaActiva.scene.resume();
+  }
+}
+
+function actualizarFilasColores() {
+  generarFilaColores('swatches-guantes', COLORES_GUANTES, 'guantes');
+  generarFilaColores('swatches-zapatillas', COLORES_ZAPATILLAS, 'zapatillas');
+  generarFilaColores('swatches-sombrero', COLORES_SOMBRERO, 'sombrero');
+}
+
+function generarFilaColores(contenedorId, opciones, slot) {
+  const cont = document.getElementById(contenedorId);
+  cont.innerHTML = '';
+  const cosm = leerCosmeticos();
+  opciones.forEach((op) => {
+    const desbloqueado = cosm.desbloqueados[slot].indexOf(op.id) !== -1;
+    const btn = document.createElement('div');
+    btn.className = 'swatch' + (cosm[slot] === op.id ? ' seleccionado' : '') + (!desbloqueado ? ' bloqueado' : '');
+    if (op.hex === null) { btn.classList.add('sin-color'); } else { btn.style.background = '#' + op.hex.toString(16).padStart(6, '0'); }
+    if (!desbloqueado) {
+      const precio = document.createElement('span');
+      precio.className = 'precio';
+      precio.textContent = op.costo;
+      btn.appendChild(precio);
+    }
+    btn.onclick = () => seleccionarColor(slot, op);
+    cont.appendChild(btn);
+  });
+}
+
+function seleccionarColor(slot, opcion) {
+  const cosm = leerCosmeticos();
+  const desbloqueado = cosm.desbloqueados[slot].indexOf(opcion.id) !== -1;
+  if (!desbloqueado) {
+    if (monedas < opcion.costo) { mostrarAviso(t('sin_monedas')); return; }
+    monedas -= opcion.costo;
+    cosm.desbloqueados[slot].push(opcion.id);
+    textoMonedas.setText(t('monedas_lbl') + monedas);
+    document.getElementById('monedas-tienda').textContent = t('monedas_lbl') + monedas;
+    sfxCompra();
+  } else {
+    sfxMenu();
+  }
+  cosm[slot] = opcion.id;
+  guardarCosmeticos(cosm);
+  aplicarCosmeticosATextura();
+  dibujarTexturasJugador(escenaActiva);
+  jugador.setTexture(poseActual);
+  actualizarFilasColores();
+}
+</script>
+</body>
+</html>

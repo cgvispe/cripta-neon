@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mapa de mundos - Cripta Neon</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; background: #e8d9b5; color: #4a3a24;
+    font-family: -apple-system, sans-serif; display: flex; flex-direction: column;
+    align-items: center; overflow-x: hidden;
+  }
+  #titulo { margin: 14px 0 4px; font-size: 20px; letter-spacing: 1px; }
+  #instrucciones { margin: 0 0 12px; font-size: 14px; color: #6b5638; text-align: center; max-width: 760px; padding: 0 12px; }
+  #game-wrap { position: relative; max-width: 100%; }
+  #game-container { border-radius: 10px; overflow: hidden; box-shadow: 0 0 24px rgba(90,70,40,0.3); }
+  #game-container canvas { max-width: 100%; height: auto; }
+  canvas { display: block; }
+
+  #controles-tactiles-mapa { position: absolute; inset: 0; display: none; pointer-events: none; z-index: 5; }
+  .btn-mapa {
+    position: absolute; bottom: 24px; width: 64px; height: 64px; border-radius: 50%;
+    background: rgba(90,70,50,0.25); border: 2px solid rgba(90,70,50,0.5); color: #4a3a24;
+    font-size: 22px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+    pointer-events: auto; touch-action: none; user-select: none;
+  }
+  #btn-mapa-izq { left: 24px; }
+  #btn-mapa-der { left: 100px; }
+  #btn-mapa-entrar { right: 24px; width: 84px; height: 84px; font-size: 14px; }
+
+  #btn-menu-mapa {
+    position: absolute; right: 16px; top: 16px; width: 42px; height: 42px; border-radius: 50%;
+    background: rgba(90,70,50,0.3); border: 2px solid rgba(90,70,50,0.6); color: #4a3a24;
+    font-size: 18px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+    cursor: pointer; z-index: 6; user-select: none;
+  }
+  .overlay-mapa {
+    position: absolute; inset: 0; background: rgba(30,20,10,0.9); display: none;
+    align-items: center; justify-content: center; flex-direction: column; z-index: 10; color: #f0e6c8;
+  }
+  .overlay-mapa h2 { color: #e8c878; margin: 0 0 4px; }
+  .overlay-mapa p { color: #d8c8a8; margin: 0 0 16px; font-size: 14px; }
+  .item-mapa {
+    background: #3a2c1a; border: 1px solid #e8c878; border-radius: 8px;
+    padding: 10px 18px; margin: 6px 0; width: 260px; display: flex;
+    justify-content: space-between; align-items: center; cursor: pointer; color: #f0e6c8;
+  }
+  .item-mapa:hover { background: #4a3a24; }
+  .fila-opcion { display: flex; align-items: center; justify-content: space-between; width: 260px; margin: 8px 0; font-size: 14px; }
+  .botones-idioma { display: flex; gap: 6px; }
+  .btn-idioma { background: transparent; border: 1px solid #e8c878; color: #f0e6c8; border-radius: 6px; padding: 4px 8px; font-size: 12px; cursor: pointer; font-weight: 700; }
+  .btn-idioma.activo { background: #e8c878; color: #3a2c1a; border-color: #e8c878; }
+  .btn-sonido { background: transparent; border: 1px solid #e8c878; color: #f0e6c8; border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
+  .hueco-llave { width: 56px; height: 56px; border-radius: 50%; display:flex; align-items:center; justify-content:center; }
+  .hueco-llave.vacio { background: #241a10; border: 2px dashed #6a5030; }
+  .hueco-llave.lleno { background: radial-gradient(circle, #ffe066 0%, #5fae4a 75%); border: 2px solid #ffe066; box-shadow: 0 0 10px #ffe06699; }
+  .cerrar-overlay-mapa {
+    margin-top: 14px; background: transparent; border: 1px solid #d8c8a8; color: #d8c8a8;
+    padding: 6px 16px; border-radius: 6px; cursor: pointer;
+  }
+</style>
+</head>
+<body>
+<div id="titulo">Mapa de mundos &mdash; Cripta Neon</div>
+<div id="instrucciones">Flechas izquierda/derecha: moverte por el camino &nbsp;|&nbsp; Espacio o Enter: entrar &nbsp;|&nbsp; M: menu</div>
+<div id="game-wrap">
+  <div id="game-container"></div>
+  <div id="btn-menu-mapa">M</div>
+
+  <div class="overlay-mapa" id="menu-mapa-general">
+    <h2 id="txt-menu-mapa-tit">Menu</h2>
+    <div class="item-mapa" id="abrir-tienda-mapa"><span id="txt-tienda-mapa">Tienda</span><span>&gt;</span></div>
+    <div class="item-mapa" id="ver-llaves-mapa"><span id="txt-ver-llaves-mapa-item">Llaves de los mundos</span><span>&gt;</span></div>
+    <div class="item-mapa" id="ver-controles-mapa"><span id="txt-controles-mapa-item">Controles</span><span>&gt;</span></div>
+    <div class="item-mapa" id="ver-idioma-sonido-mapa"><span id="txt-idioma-sonido-mapa-item">Idioma y sonido</span><span>&gt;</span></div>
+    <div class="item-mapa" id="guardar-salir-inicio-mapa"><span id="txt-guardar-salir-mapa">Guardar y salir al inicio</span><span>&gt;</span></div>
+    <button class="cerrar-overlay-mapa" id="cerrar-menu-mapa-general">Cerrar</button>
+  </div>
+
+  <div class="overlay-mapa" id="tienda-mapa">
+    <h2 id="txt-tienda-mapa-tit">Tienda</h2>
+    <p id="txt-tienda-mapa-texto">Monedas: 0<br>Las monedas que consigas jugando niveles apareceran aqui en cuanto tengamos partidas guardadas.</p>
+    <button class="cerrar-overlay-mapa" id="cerrar-tienda-mapa">Cerrar</button>
+  </div>
+
+  <div class="overlay-mapa" id="llaves-panel-mapa">
+    <h2 id="txt-llaves-mapa-tit">Llaves de los mundos</h2>
+    <p id="txt-llaves-mapa-contador" style="margin-bottom:14px;">0 / 8</p>
+    <div id="rejilla-llaves-mapa" style="display:grid; grid-template-columns:repeat(4, 1fr); gap:14px; margin-bottom:16px;"></div>
+    <button class="cerrar-overlay-mapa" id="cerrar-llaves-mapa">Cerrar</button>
+  </div>
+
+  <div class="overlay-mapa" id="controles-mapa">
+    <h2 id="txt-controles-mapa-tit">Controles</h2>
+    <p id="txt-controles-mapa-lista" style="text-align:left; max-width:280px;"></p>
+    <button class="cerrar-overlay-mapa" id="cerrar-controles-mapa">Cerrar</button>
+  </div>
+
+  <div class="overlay-mapa" id="idioma-sonido-mapa">
+    <h2 id="txt-idioma-sonido-mapa-tit">Idioma y sonido</h2>
+    <div class="fila-opcion">
+      <span id="txt-idioma-label-mapa">Idioma</span>
+      <div class="botones-idioma">
+        <button class="btn-idioma" data-idioma="es">ES</button>
+        <button class="btn-idioma" data-idioma="en">EN</button>
+        <button class="btn-idioma" data-idioma="fr">FR</button>
+        <button class="btn-idioma" data-idioma="it">IT</button>
+      </div>
+    </div>
+    <div class="fila-opcion">
+      <span id="txt-sonido-label-mapa">Sonido</span>
+      <div class="btn-sonido" id="btn-sonido-mapa">Activado</div>
+    </div>
+    <button class="cerrar-overlay-mapa" id="cerrar-idioma-sonido-mapa">Cerrar</button>
+  </div>
+
+  <div id="controles-tactiles-mapa">
+    <div class="btn-mapa" id="btn-mapa-izq">&#9664;</div>
+    <div class="btn-mapa" id="btn-mapa-der">&#9654;</div>
+    <div class="btn-mapa" id="btn-mapa-entrar">ENTRAR</div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.70.0/phaser.min.js" crossorigin="anonymous"></script>
+<script>
+
+const VIEW_W = 800, VIEW_H = 450;
+
+const NODOS = [
+  { tipo: 'nivel', num: 1, x: 150, y: 300, estado: 'jugable', archivo: 'prototipo_v23.html', nombre: 'Amanecer en la Pradera', construido: true },
+  { tipo: 'nivel', num: 2, x: 380, y: 220, estado: 'bloqueado_progreso', archivo: 'nivel2_mundo1.html', nombre: 'El Sendero de los Cofres', construido: true },
+  { tipo: 'nivel', num: 3, x: 610, y: 320, estado: 'pendiente', nombre: 'La Colina del Viento', construido: true, archivo: 'nivel3_mundo1.html' },
+  { tipo: 'nivel', num: 4, x: 840, y: 230, estado: 'pendiente', nombre: 'El Claro Encantado', construido: true, archivo: 'nivel4_mundo1.html' },
+  { tipo: 'nivel', num: 5, x: 1070, y: 320, estado: 'pendiente', nombre: 'Las Puertas del Castillo', construido: true, archivo: 'nivel5_mundo1.html' },
+  { tipo: 'jefe', x: 1300, y: 230, estado: 'bloqueado', nombre: 'El Guardian de la Pradera', construido: true, archivo: 'jefe_mundo1.html' },
+  { tipo: 'mundo', num: 2, x: 1620, y: 300, estado: 'bloqueado' },
+  { tipo: 'mundo', num: 3, x: 1920, y: 230, estado: 'bloqueado' },
+  { tipo: 'mundo', num: 4, x: 2220, y: 320, estado: 'bloqueado' },
+  { tipo: 'mundo', num: 5, x: 2520, y: 230, estado: 'bloqueado' },
+  { tipo: 'mundo', num: 6, x: 2820, y: 320, estado: 'bloqueado' },
+  { tipo: 'mundo', num: 7, x: 3120, y: 230, estado: 'bloqueado' },
+  { tipo: 'mundo', num: 8, x: 3420, y: 320, estado: 'bloqueado' }
+];
+const WORLD_W = 3600, WORLD_H = 450;
+
+const COSMETICOS = { colorCuerpo: 0x4fb8e0, colorGuantes: 0xf4ead8, colorZapatillas: 0xffd76a, colorMejillas: 0xff9a9a };
+const PALETA = {
+  pergamino: 0xe8d9b5, pergaminoMancha: 0xd9c69c,
+  tinta: 0x5a4632, tintaSuave: 0x8a7455,
+  islaPradera: 0x8fcf72, islaPraderaBorde: 0x4f8a3a, islaPraderaDetalle: 0x6fae52,
+  nodoJugable: 0xffe066, nodoJugableBorde: 0x2c6b3a,
+  nodoPendiente: 0xf0e6c8, nodoPendienteBorde: 0xb7a878,
+  nodoBloqueado: 0xc9bd9c, nodoBloqueadoBorde: 0x8a7455,
+  jefe: 0x8a6a8a
+};
+
+// paletas "en la niebla" (apagadas) para el terreno de cada mundo aun bloqueado
+const BIOMAS = {
+  2: { base: 0x5aa8d6, oscuro: 0x3a7ab0, detalle: 0xdfe8ee },  // Tormenta en la Playa
+  3: { base: 0xe8c878, oscuro: 0xd4a94f, detalle: 0x6b8f3f },  // Desierto Arenoso
+  4: { base: 0x2f5f78, oscuro: 0x1f4356, detalle: 0x5a8a6a },  // Lago Siniestro
+  5: { base: 0x4a8f4a, oscuro: 0x336633, detalle: 0x6fae52 },  // Bosque Frondoso
+  6: { base: 0xd8e6ef, oscuro: 0x8fa5b8, detalle: 0xffffff },  // Montaña Gélida
+  7: { base: 0x5f7a4a, oscuro: 0x455c34, detalle: 0x8fae6f },  // Pantano Mágico
+  8: { base: 0xd4562e, oscuro: 0x8a2e1a, detalle: 0x8a8a8a }   // Volcán Candente
+};
+
+const PALETA_NIEBLA = { claro: 0xb08ce0, medio: 0x7a4fb8, oscuro: 0x4f2c85 };
+const NOMBRES_MUNDO = {
+  2: 'Tormenta en la Playa', 3: 'Desierto Arenoso', 4: 'Lago Siniestro', 5: 'Bosque Frondoso',
+  6: 'Montaña Gelida', 7: 'Pantano Magico', 8: 'Volcan Candente'
+};
+
+let personaje, indiceActual = 0;
+let mundosDesbloqueados = [];
+let enMovimiento = false;
+let menuMapaAbierto = false;
+let modoCreador = false;
+let indiceMaximoAlcanzable = 0;
+let textoAviso, textoAvisoFondo;
+let escenaActiva;
+
+const TRADUCCIONES = {
+  es: {
+    menu_tit: 'Menu', tienda: 'Tienda', controles_item: 'Controles', idioma_sonido_item: 'Idioma y sonido', ver_llaves: 'Llaves de los mundos',
+    guardar_salir: 'Guardar y salir al inicio', cerrar: 'Cerrar',
+    tienda_tit: 'Tienda', tienda_texto: 'Monedas: {n}<br>Las monedas que consigas jugando niveles apareceran aqui.',
+    controles_tit: 'Controles',
+    controles_lista: 'Flechas izquierda/derecha: moverte por el camino<br>Espacio o Enter: entrar en el nivel/mundo seleccionado<br>M: abrir este menu<br><br>En movil: flechas y boton ENTRAR en pantalla.',
+    idioma_sonido_tit: 'Idioma y sonido', idioma: 'Idioma', sonido: 'Sonido', sonido_on: 'Activado', sonido_off: 'Silenciado',
+    bloqueado_nivel: 'Nivel en construccion', bloqueado_jefe: 'Completa los 5 niveles primero', bloqueado_mundo: 'Mundo bloqueado', pendiente: 'Pendiente',
+    bloqueado_progreso: '(bloqueado)', bloqueado_progreso_aviso: 'Completa el nivel anterior primero', jefe_misterioso: '???'
+  },
+  en: {
+    menu_tit: 'Menu', tienda: 'Shop', controles_item: 'Controls', idioma_sonido_item: 'Language and sound', ver_llaves: 'World keys',
+    guardar_salir: 'Save and exit to title', cerrar: 'Close',
+    tienda_tit: 'Shop', tienda_texto: 'Coins: {n}<br>Coins you earn playing levels will show up here.',
+    controles_tit: 'Controls',
+    controles_lista: 'Left/right arrows: move along the path<br>Space or Enter: enter the selected level/world<br>M: open this menu<br><br>On mobile: on-screen arrows and ENTER button.',
+    idioma_sonido_tit: 'Language and sound', idioma: 'Language', sonido: 'Sound', sonido_on: 'On', sonido_off: 'Muted',
+    bloqueado_nivel: 'Level under construction', bloqueado_jefe: 'Complete the 5 levels first', bloqueado_mundo: 'World locked', pendiente: 'Pending',
+    bloqueado_progreso: '(locked)', bloqueado_progreso_aviso: 'Complete the previous level first', jefe_misterioso: '???'
+  },
+  fr: {
+    menu_tit: 'Menu', tienda: 'Boutique', controles_item: 'Controles', idioma_sonido_item: 'Langue et son', ver_llaves: 'Cles des mondes',
+    guardar_salir: 'Sauvegarder et quitter', cerrar: 'Fermer',
+    tienda_tit: 'Boutique', tienda_texto: 'Pieces : {n}<br>Les pieces gagnees en jouant apparaitront ici.',
+    controles_tit: 'Controles',
+    controles_lista: 'Fleches gauche/droite : se deplacer sur le chemin<br>Espace ou Entree : entrer dans le niveau/monde selectionne<br>M : ouvrir ce menu<br><br>Sur mobile : fleches et bouton ENTRER a l\'ecran.',
+    idioma_sonido_tit: 'Langue et son', idioma: 'Langue', sonido: 'Son', sonido_on: 'Active', sonido_off: 'Coupe',
+    bloqueado_nivel: 'Niveau en construction', bloqueado_jefe: 'Termine dabord les 5 niveaux', bloqueado_mundo: 'Monde verrouille', pendiente: 'A venir',
+    bloqueado_progreso: '(verrouille)', bloqueado_progreso_aviso: 'Termine dabord le niveau precedent', jefe_misterioso: '???'
+  },
+  it: {
+    menu_tit: 'Menu', tienda: 'Negozio', controles_item: 'Controlli', idioma_sonido_item: 'Lingua e audio', ver_llaves: 'Chiavi dei mondi',
+    guardar_salir: 'Salva ed esci al menu', cerrar: 'Chiudi',
+    tienda_tit: 'Negozio', tienda_texto: 'Monete: {n}<br>Le monete guadagnate giocando appariranno qui.',
+    controles_tit: 'Controlli',
+    controles_lista: 'Frecce sinistra/destra: muoviti sul sentiero<br>Spazio o Invio: entra nel livello/mondo selezionato<br>M: apri questo menu<br><br>Su mobile: frecce e pulsante ENTRA a schermo.',
+    idioma_sonido_tit: 'Lingua e audio', idioma: 'Lingua', sonido: 'Audio', sonido_on: 'Attivo', sonido_off: 'Muto',
+    bloqueado_nivel: 'Livello in costruzione', bloqueado_jefe: 'Completa prima i 5 livelli', bloqueado_mundo: 'Mondo bloccato', pendiente: 'In arrivo',
+    bloqueado_progreso: '(bloccato)', bloqueado_progreso_aviso: 'Completa prima il livello precedente', jefe_misterioso: '???'
+  }
+};
+
+let idiomaActual = localStorage.getItem('cripta_neon_idioma') || 'es';
+let sonidoActivado = localStorage.getItem('cripta_neon_sonido') !== 'no';
+
+function t(clave) { return (TRADUCCIONES[idiomaActual] && TRADUCCIONES[idiomaActual][clave]) || TRADUCCIONES.es[clave] || clave; }
+
+function cambiarIdioma(codigo) {
+  idiomaActual = codigo;
+  localStorage.setItem('cripta_neon_idioma', codigo);
+  aplicarIdioma();
+}
+
+function alternarSonido() {
+  sonidoActivado = !sonidoActivado;
+  localStorage.setItem('cripta_neon_sonido', sonidoActivado ? 'si' : 'no');
+  if (!sonidoActivado) detenerMusica(); else reproducirMusica(obtenerMelodiaNodo(NODOS[indiceActual]));
+  aplicarIdioma();
+}
+
+function aplicarIdioma() {
+  document.getElementById('txt-menu-mapa-tit').textContent = t('menu_tit');
+  document.getElementById('txt-tienda-mapa').textContent = t('tienda');
+  document.getElementById('txt-ver-llaves-mapa-item').textContent = t('ver_llaves');
+  document.getElementById('txt-llaves-mapa-tit').textContent = t('ver_llaves');
+  document.getElementById('txt-controles-mapa-item').textContent = t('controles_item');
+  document.getElementById('txt-idioma-sonido-mapa-item').textContent = t('idioma_sonido_item');
+  document.getElementById('txt-guardar-salir-mapa').textContent = t('guardar_salir');
+  document.getElementById('txt-tienda-mapa-tit').textContent = t('tienda_tit');
+  const monedasGuardadas = (leerGuardado().monedas) || 0;
+  document.getElementById('txt-tienda-mapa-texto').innerHTML = t('tienda_texto').replace('{n}', monedasGuardadas);
+  document.getElementById('txt-controles-mapa-tit').textContent = t('controles_tit');
+  document.getElementById('txt-controles-mapa-lista').innerHTML = t('controles_lista');
+  document.getElementById('txt-idioma-sonido-mapa-tit').textContent = t('idioma_sonido_tit');
+  document.getElementById('txt-idioma-label-mapa').textContent = t('idioma');
+  document.getElementById('txt-sonido-label-mapa').textContent = t('sonido');
+  document.getElementById('btn-sonido-mapa').textContent = sonidoActivado ? t('sonido_on') : t('sonido_off');
+  document.querySelectorAll('.overlay-mapa .cerrar-overlay-mapa').forEach((b) => { b.textContent = t('cerrar'); });
+  document.querySelectorAll('.btn-idioma').forEach((boton) => {
+    boton.classList.toggle('activo', boton.dataset.idioma === idiomaActual);
+  });
+}
+
+// ---- motor de audio sintetizado (sin archivos externos) ----
+let audioCtx = null;
+function obtenerAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+function tono(frecuencia, duracion, tipo, volumen, cuando) {
+  if (!sonidoActivado) return;
+  const ctx = obtenerAudioCtx();
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = tipo || 'square';
+  osc.frequency.value = frecuencia;
+  const inicio = ctx.currentTime + (cuando || 0);
+  gain.gain.setValueAtTime(0.0001, inicio);
+  gain.gain.linearRampToValueAtTime(volumen || 0.14, inicio + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.0001, inicio + duracion);
+  osc.connect(gain); gain.connect(ctx.destination);
+  osc.start(inicio); osc.stop(inicio + duracion + 0.03);
+}
+function ruido(duracion, volumen) {
+  if (!sonidoActivado) return;
+  const ctx = obtenerAudioCtx();
+  const buffer = ctx.createBuffer(1, ctx.sampleRate * duracion, ctx.sampleRate);
+  const datos = buffer.getChannelData(0);
+  for (let i = 0; i < datos.length; i++) datos[i] = (Math.random() * 2 - 1) * (1 - i / datos.length);
+  const fuente = ctx.createBufferSource();
+  fuente.buffer = buffer;
+  const gain = ctx.createGain();
+  gain.gain.value = volumen || 0.12;
+  fuente.connect(gain); gain.connect(ctx.destination);
+  fuente.start();
+}
+
+function sfxPaso() { tono(220 + Math.random() * 40, 0.05, 'triangle', 0.05); }
+function sfxMenu() { tono(600, 0.05, 'square', 0.07); }
+function sfxBloqueado() { tono(220, 0.15, 'sawtooth', 0.08); }
+function sfxEntrar() { tono(660, 0.1, 'triangle', 0.1); tono(990, 0.14, 'triangle', 0.1, 0.08); }
+function sfxNiebla() {
+  [440, 554, 659, 880].forEach((f, i) => tono(f, 0.3, 'sine', 0.08, i * 0.1));
+}
+
+const TEMA_PRADERA = [
+  { f: 262, d: 0.18 }, { f: 330, d: 0.18 }, { f: 392, d: 0.18 }, { f: 523, d: 0.26 },
+  { f: 392, d: 0.18 }, { f: 440, d: 0.18 }, { f: 523, d: 0.18 }, { f: 659, d: 0.3 },
+  { f: 587, d: 0.18 }, { f: 523, d: 0.18 }, { f: 440, d: 0.18 }, { f: 392, d: 0.26 },
+  { f: 330, d: 0.18 }, { f: 392, d: 0.18 }, { f: 440, d: 0.18 }, { f: 523, d: 0.42 }
+];
+const MELODIA_MAPA = TEMA_PRADERA;
+
+// tema de jefe: el mismo tema de la Pradera, pero mas rapido, con tambor en los tiempos fuertes y una "flauta" (armonia una octava por encima)
+const MELODIA_JEFE_1 = TEMA_PRADERA.map((nota, i) => ({
+  f: nota.f, d: nota.d * 0.72, tipo: 'sawtooth', tambor: i % 4 === 0, armonia: nota.f * 2
+}));
+
+const MELODIAS_MUNDO = {
+  2: [ // Tormenta en la Playa: arpegio ondulante
+    { f: 294, d: 0.3, tipo: 'sine' }, { f: 349, d: 0.3, tipo: 'sine' }, { f: 440, d: 0.3, tipo: 'sine' }, { f: 349, d: 0.3, tipo: 'sine' },
+    { f: 262, d: 0.3, tipo: 'sine' }, { f: 349, d: 0.3, tipo: 'sine' }, { f: 392, d: 0.5, tipo: 'sine' }
+  ],
+  3: [ // Desierto Arenoso: escala exotica, pausada
+    { f: 293, d: 0.5, tipo: 'triangle' }, { f: 311, d: 0.3, tipo: 'triangle' }, { f: 415, d: 0.5, tipo: 'triangle' },
+    { f: 466, d: 0.3, tipo: 'triangle' }, { f: 415, d: 0.5, tipo: 'triangle' }, { f: 311, d: 0.6, tipo: 'triangle' }
+  ],
+  4: [ // Lago Siniestro: lenta y grave, inquietante
+    { f: 174, d: 0.7, tipo: 'sine' }, { f: 207, d: 0.6, tipo: 'sine' }, { f: 155, d: 0.8, tipo: 'sine' },
+    { f: 196, d: 0.7, tipo: 'sine' }, { f: 174, d: 0.9, tipo: 'sine' }
+  ],
+  5: [ // Bosque Frondoso: alegre y saltarina
+    { f: 349, d: 0.22, tipo: 'triangle' }, { f: 440, d: 0.22, tipo: 'triangle' }, { f: 523, d: 0.22, tipo: 'triangle' }, { f: 440, d: 0.22, tipo: 'triangle' },
+    { f: 392, d: 0.22, tipo: 'triangle' }, { f: 523, d: 0.22, tipo: 'triangle' }, { f: 587, d: 0.35, tipo: 'triangle' }
+  ],
+  6: [ // Montaña Gelida: dispersa, cristalina, aguda
+    { f: 784, d: 0.35, tipo: 'sine' }, { f: 0, d: 0.2 }, { f: 659, d: 0.35, tipo: 'sine' }, { f: 0, d: 0.2 },
+    { f: 880, d: 0.5, tipo: 'sine' }, { f: 0, d: 0.3 }, { f: 587, d: 0.5, tipo: 'sine' }
+  ],
+  7: [ // Pantano Magico: misteriosa, semitonos
+    { f: 233, d: 0.4, tipo: 'triangle' }, { f: 247, d: 0.4, tipo: 'triangle' }, { f: 311, d: 0.4, tipo: 'triangle' },
+    { f: 277, d: 0.4, tipo: 'triangle' }, { f: 233, d: 0.6, tipo: 'triangle' }
+  ],
+  8: [ // Volcan Candente: rapida y agresiva
+    { f: 330, d: 0.15, tipo: 'sawtooth' }, { f: 392, d: 0.15, tipo: 'sawtooth' }, { f: 466, d: 0.15, tipo: 'sawtooth' }, { f: 392, d: 0.15, tipo: 'sawtooth' },
+    { f: 330, d: 0.15, tipo: 'sawtooth' }, { f: 466, d: 0.15, tipo: 'sawtooth' }, { f: 554, d: 0.25, tipo: 'sawtooth' }
+  ]
+};
+
+function obtenerMelodiaNodo(nodo) {
+  if (!nodo) return MELODIA_MAPA;
+  if (nodo.tipo === 'jefe') return MELODIA_JEFE_1;
+  if (nodo.tipo === 'mundo') return MELODIAS_MUNDO[nodo.num] || MELODIA_MAPA;
+  return MELODIA_MAPA;
+}
+
+function obtenerMelodiaPorMundoGuardado() {
+  const mundoGuardado = leerGuardado().mundo || 1;
+  return mundoGuardado === 1 ? MELODIA_MAPA : (MELODIAS_MUNDO[mundoGuardado] || MELODIA_MAPA);
+}
+
+let musicaTimer = null;
+function reproducirMusica(notas) {
+  detenerMusica();
+  let i = 0;
+  const paso = () => {
+    if (!sonidoActivado) { musicaTimer = setTimeout(paso, 300); return; }
+    const nota = notas[i % notas.length];
+    if (nota.f > 0) tono(nota.f, nota.d * 0.85, nota.tipo || 'triangle', 0.04);
+    if (nota.armonia) tono(nota.armonia, nota.d * 0.7, 'sine', 0.03);
+    if (nota.tambor) ruido(0.07, 0.09);
+    i++;
+    musicaTimer = setTimeout(paso, nota.d * 1000);
+  };
+  paso();
+}
+function detenerMusica() { if (musicaTimer) clearTimeout(musicaTimer); musicaTimer = null; }
+function iniciarAudioConGesto() {
+  const arrancar = () => { obtenerAudioCtx(); if (sonidoActivado) reproducirMusica(obtenerMelodiaPorMundoGuardado()); quitarListeners(); };
+  const quitarListeners = () => {
+    window.removeEventListener('pointerdown', arrancar);
+    window.removeEventListener('keydown', arrancar);
+    window.removeEventListener('pointermove', arrancar);
+    window.removeEventListener('touchstart', arrancar);
+  };
+  window.addEventListener('pointerdown', arrancar);
+  window.addEventListener('keydown', arrancar);
+  window.addEventListener('pointermove', arrancar);
+  window.addEventListener('touchstart', arrancar);
+}
+
+const config = {
+  type: Phaser.AUTO,
+  width: VIEW_W,
+  height: VIEW_H,
+  parent: 'game-container',
+  backgroundColor: '#e8d9b5',
+  scene: { preload, create, update }
+};
+
+const juego = new Phaser.Game(config);
+juego.events.once('ready', () => {
+  if (juego.canvas) { juego.canvas.setAttribute('tabindex', '0'); juego.canvas.focus(); }
+});
+document.getElementById('game-container').addEventListener('pointerdown', () => {
+  if (juego.canvas) juego.canvas.focus();
+});
+
+function preload() {
+  const g = this.add.graphics();
+  const forma = (dibujar, w, h, key) => { g.clear(); dibujar(); g.generateTexture(key, w, h); };
+
+  const cara = (cx, cy) => {
+    g.fillCircle(cx, cy, 11);
+    g.fillStyle(COSMETICOS.colorMejillas, 1); g.fillCircle(cx - 6, cy + 2, 2.2); g.fillCircle(cx + 6, cy + 2, 2.2);
+    g.fillStyle(0xffffff, 1); g.fillCircle(cx - 4, cy - 2, 4); g.fillCircle(cx + 4, cy - 2, 4);
+    g.fillStyle(0x1b1230, 1); g.fillCircle(cx - 3, cy - 1, 1.8); g.fillCircle(cx + 5, cy - 1, 1.8);
+  };
+
+  forma(() => {
+    g.fillStyle(COSMETICOS.colorCuerpo, 1); g.fillRoundedRect(2, 16, 16, 16, 6); cara(10, 12);
+    g.fillStyle(COSMETICOS.colorZapatillas, 1); g.fillRoundedRect(0, 30, 8, 5, 2); g.fillRoundedRect(12, 30, 8, 5, 2);
+  }, 20, 36, 'personaje_mapa_idle');
+
+  forma(() => {
+    g.fillStyle(COSMETICOS.colorCuerpo, 1); g.fillRoundedRect(3, 16, 16, 16, 6); cara(11, 12);
+    g.fillStyle(COSMETICOS.colorZapatillas, 1); g.fillRoundedRect(-1, 28, 8, 5, 2); g.fillRoundedRect(14, 32, 8, 5, 2);
+  }, 22, 36, 'personaje_mapa_correr1');
+
+  forma(() => {
+    g.fillStyle(COSMETICOS.colorCuerpo, 1); g.fillRoundedRect(2, 16, 16, 16, 6); cara(10, 12);
+    g.fillStyle(COSMETICOS.colorZapatillas, 1); g.fillRoundedRect(-1, 32, 8, 5, 2); g.fillRoundedRect(14, 28, 8, 5, 2);
+  }, 22, 36, 'personaje_mapa_correr2');
+
+  g.destroy();
+}
+
+function create() {
+  escenaActiva = this;
+  mundosDesbloqueados = leerGuardado().mundosDesbloqueados || [];
+  const nivelesCompletados = leerGuardado().nivelesCompletados || [];
+  NODOS.forEach((nodo) => {
+    if (nodo.tipo === 'nivel' && nodo.construido && nodo.num > 1) {
+      nodo.estado = nivelesCompletados.indexOf(nodo.num - 1) !== -1 ? 'jugable' : 'bloqueado_progreso';
+    }
+    if (nodo.tipo === 'jefe') {
+      const cincoCompletados = [1, 2, 3, 4, 5].every((n) => nivelesCompletados.indexOf(n) !== -1);
+      nodo.estado = !cincoCompletados ? 'bloqueado' : (nodo.construido ? 'jugable' : 'pendiente');
+    }
+  });
+
+  indiceMaximoAlcanzable = 0;
+  for (let i = 0; i < NODOS.length; i++) {
+    if (NODOS[i].estado === 'jugable') indiceMaximoAlcanzable = i;
+    else break;
+  }
+
+  const fondo = this.add.graphics();
+  fondo.fillStyle(PALETA.pergaminoMancha, 0.5);
+  for (let i = 0; i < 26; i++) {
+    const mx = (i * 733) % WORLD_W, my = 60 + ((i * 197) % 340);
+    fondo.fillEllipse(mx, my, 90 + (i % 3) * 30, 50 + (i % 4) * 16);
+  }
+
+  // isla orgánica del Mundo 1
+  fondo.fillStyle(PALETA.islaPraderaBorde, 1);
+  fondo.fillEllipse(700, 300, 1360, 260);
+  fondo.fillEllipse(180, 260, 220, 170);
+  fondo.fillEllipse(1280, 300, 230, 190);
+  fondo.fillStyle(PALETA.islaPradera, 1);
+  fondo.fillEllipse(700, 300, 1320, 226);
+  fondo.fillEllipse(180, 260, 190, 140);
+  fondo.fillEllipse(1280, 300, 200, 160);
+  fondo.fillStyle(PALETA.pergamino, 1);
+  fondo.fillEllipse(60, 150, 120, 90);
+  fondo.fillEllipse(1360, 130, 130, 100);
+  fondo.fillEllipse(700, 440, 200, 70);
+  fondo.fillStyle(PALETA.islaPraderaDetalle, 1);
+  for (let x = 60; x < 1360; x += 90) fondo.fillCircle(x, 300 + Math.sin(x / 90) * 30, 5);
+
+  // arbolitos repartidos por la isla (evitando la zona de los nodos)
+  const zonasNodos = NODOS.slice(0, 6).map((n) => n.x);
+  const puntosArbol = [90, 260, 460, 700, 940, 1180, 1340, 220, 520, 820, 1060];
+  puntosArbol.forEach((x, i) => {
+    const cerca = zonasNodos.some((nx) => Math.abs(nx - x) < 70);
+    if (cerca) return;
+    const y = 300 + Math.sin(x / 90) * 30 - 46 - (i % 2) * 10;
+    fondo.fillStyle(0x6b4a2c, 1); fondo.fillRect(x - 3, y + 14, 6, 16);
+    fondo.fillStyle(PALETA.islaPraderaBorde, 1); fondo.fillCircle(x, y + 6, 15);
+    fondo.fillStyle(PALETA.islaPraderaDetalle, 1); fondo.fillCircle(x - 3, y, 11);
+  });
+
+  // florecillas
+  const coloresFlor = [0xffe066, 0xffffff, 0xff9ac1];
+  for (let i = 0; i < 24; i++) {
+    const x = 90 + (i * 137) % 1240;
+    const y = 300 + Math.sin(x / 90) * 30 + 40 + (i % 3) * 8;
+    fondo.fillStyle(coloresFlor[i % 3], 1); fondo.fillCircle(x, y, 3);
+  }
+
+  // un par de animalitos sencillos (conejito y pajarillo)
+  fondo.fillStyle(0xffffff, 1);
+  fondo.fillEllipse(470, 360, 16, 11);
+  fondo.fillCircle(478, 352, 7);
+  fondo.fillTriangle(474, 346, 476, 336, 480, 346);
+  fondo.fillTriangle(482, 346, 484, 337, 487, 346);
+  fondo.fillStyle(0xff9ac1, 1); fondo.fillCircle(479, 353, 1.6);
+
+  fondo.fillStyle(0xe8a23a, 1);
+  fondo.fillEllipse(980, 260, 12, 9);
+  fondo.fillCircle(988, 255, 5);
+  fondo.fillTriangle(992, 255, 999, 253, 992, 258);
+
+  this.add.text(220, 150, 'Pradera Serena', { fontSize: '18px', fontStyle: 'italic', color: '#3a5a2c', stroke: '#f2ecd8', strokeThickness: 2 });
+
+  // camino de tinta punteado entre nodos consecutivos
+  fondo.fillStyle(PALETA.tinta, 1);
+  for (let i = 0; i < NODOS.length - 1; i++) {
+    dibujarPunteado(fondo, NODOS[i].x, NODOS[i].y, NODOS[i + 1].x, NODOS[i + 1].y);
+  }
+
+  NODOS.forEach((nodo, i) => dibujarNodo(this, nodo, i));
+
+  personaje = this.add.image(NODOS[0].x, NODOS[0].y - 30, 'personaje_mapa_idle');
+
+  this.cameras.main.setBounds(0, 0, WORLD_W, WORLD_H);
+  this.cameras.main.startFollow(personaje, true, 0.1, 0.1);
+
+  dibujarRosaDeLosVientos(this, 50, 50);
+
+  textoAvisoFondo = this.add.rectangle(VIEW_W / 2, VIEW_H - 50, 300, 34, 0x1a1410, 0.75).setScrollFactor(0).setVisible(false);
+  textoAviso = this.add.text(VIEW_W / 2, VIEW_H - 50, '', { fontSize: '14px', color: '#ffffff' }).setOrigin(0.5).setScrollFactor(0).setVisible(false);
+
+  this.input.keyboard.on('keydown-LEFT', () => moverSeleccion(-1));
+  this.input.keyboard.on('keydown-RIGHT', () => moverSeleccion(1));
+  this.input.keyboard.on('keydown-SPACE', entrarEnNodo);
+  this.input.keyboard.on('keydown-ENTER', entrarEnNodo);
+  this.input.keyboard.on('keydown-M', abrirMenuMapaGeneral);
+  this.input.keyboard.on('keydown-U', () => {
+    const nodo = NODOS[indiceActual];
+    if (nodo.tipo === 'mundo' && nodo.nieblaGraphics) {
+      disiparNiebla(nodo);
+      guardarMundoDesbloqueado(nodo.num);
+    }
+  });
+
+  // === MODO PRUEBA (solo para desarrollo, BORRAR este bloque antes de publicar) ===
+  this.input.keyboard.on('keydown-P', () => {
+    const datos = leerGuardado();
+    datos.nivelesCompletados = [1, 2, 3, 4, 5];
+    datos.mundosDesbloqueados = [1, 2, 3, 4, 5, 6, 7, 8];
+    localStorage.setItem('cripta_neon_guardado', JSON.stringify(datos));
+    location.reload();
+  });
+  this.input.keyboard.on('keydown-O', () => {
+    localStorage.removeItem('cripta_neon_guardado');
+    location.reload();
+  });
+  this.input.keyboard.on('keydown-Q', () => {
+    modoCreador = !modoCreador;
+    mostrarAviso(modoCreador ? 'Modo creador activado' : 'Modo creador desactivado');
+  });
+  // === FIN MODO PRUEBA ===
+
+  configurarControlesTactilesMapa();
+  configurarMenuMapaGeneral();
+  iniciarAudioConGesto();
+}
+
+function configurarMenuMapaGeneral() {
+  document.getElementById('btn-menu-mapa').addEventListener('pointerdown', (e) => { e.preventDefault(); abrirMenuMapaGeneral(); });
+  document.getElementById('cerrar-menu-mapa-general').onclick = () => { menuMapaAbierto = false; document.getElementById('menu-mapa-general').style.display = 'none'; };
+  document.getElementById('abrir-tienda-mapa').onclick = () => {
+    document.getElementById('menu-mapa-general').style.display = 'none';
+    document.getElementById('tienda-mapa').style.display = 'flex';
+  };
+  document.getElementById('cerrar-tienda-mapa').onclick = () => { menuMapaAbierto = false; document.getElementById('tienda-mapa').style.display = 'none'; };
+  document.getElementById('ver-llaves-mapa').onclick = () => {
+    document.getElementById('menu-mapa-general').style.display = 'none';
+    document.getElementById('llaves-panel-mapa').style.display = 'flex';
+    pintarLlavesMapa();
+  };
+  document.getElementById('cerrar-llaves-mapa').onclick = () => { menuMapaAbierto = false; document.getElementById('llaves-panel-mapa').style.display = 'none'; };
+  document.getElementById('ver-controles-mapa').onclick = () => {
+    document.getElementById('menu-mapa-general').style.display = 'none';
+    document.getElementById('controles-mapa').style.display = 'flex';
+  };
+  document.getElementById('cerrar-controles-mapa').onclick = () => { menuMapaAbierto = false; document.getElementById('controles-mapa').style.display = 'none'; };
+  document.getElementById('ver-idioma-sonido-mapa').onclick = () => {
+    document.getElementById('menu-mapa-general').style.display = 'none';
+    document.getElementById('idioma-sonido-mapa').style.display = 'flex';
+  };
+  document.getElementById('cerrar-idioma-sonido-mapa').onclick = () => { menuMapaAbierto = false; document.getElementById('idioma-sonido-mapa').style.display = 'none'; };
+  document.querySelectorAll('#idioma-sonido-mapa .btn-idioma').forEach((boton) => {
+    boton.onclick = () => cambiarIdioma(boton.dataset.idioma);
+  });
+  document.getElementById('btn-sonido-mapa').onclick = alternarSonido;
+  document.getElementById('guardar-salir-inicio-mapa').onclick = () => {
+    document.getElementById('menu-mapa-general').style.display = 'none';
+    menuMapaAbierto = false;
+    const nodo = NODOS[indiceActual];
+    const mundo = nodo.tipo === 'mundo' ? nodo.num : 1;
+    const datos = leerGuardado();
+    datos.mundo = mundo;
+    localStorage.setItem('cripta_neon_guardado', JSON.stringify(datos));
+    window.location.href = 'inicio.html';
+  };
+  aplicarIdioma();
+}
+
+function leerGuardado() {
+  try { return JSON.parse(localStorage.getItem('cripta_neon_guardado')) || {}; } catch (e) { return {}; }
+}
+
+function pintarLlavesMapa() {
+  const datos = leerGuardado();
+  const llaves = datos.llaves || [];
+  document.getElementById('txt-llaves-mapa-contador').textContent = llaves.length + ' / 8';
+  const rejilla = document.getElementById('rejilla-llaves-mapa');
+  rejilla.innerHTML = '';
+  for (let mundo = 1; mundo <= 8; mundo++) {
+    const conseguida = llaves.indexOf(mundo) !== -1;
+    const casilla = document.createElement('div');
+    casilla.className = 'hueco-llave ' + (conseguida ? 'lleno' : 'vacio');
+    casilla.innerHTML = conseguida ? `<svg width="34" height="20" viewBox="0 0 54 30" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="14" cy="15" r="13" fill="#ffe066" stroke="#3f8a3a" stroke-width="2"/>
+        <circle cx="14" cy="15" r="8" fill="#5fae4a"/>
+        <circle cx="14" cy="15" r="3" fill="#ffe066"/>
+        <rect x="24" y="11" width="22" height="8" fill="#ffe066"/>
+        <rect x="38" y="19" width="5" height="8" fill="#ffe066"/>
+        <rect x="46" y="19" width="5" height="10" fill="#ffe066"/>
+      </svg>` : '';
+    casilla.title = 'Mundo ' + mundo;
+    rejilla.appendChild(casilla);
+  }
+}
+
+function guardarMundoDesbloqueado(num) {
+  const datos = leerGuardado();
+  if (!datos.mundosDesbloqueados) datos.mundosDesbloqueados = [];
+  if (datos.mundosDesbloqueados.indexOf(num) === -1) datos.mundosDesbloqueados.push(num);
+  localStorage.setItem('cripta_neon_guardado', JSON.stringify(datos));
+  mundosDesbloqueados = datos.mundosDesbloqueados;
+}
+
+function abrirMenuMapaGeneral() {
+  if (menuMapaAbierto) return;
+  menuMapaAbierto = true;
+  sfxMenu();
+  document.getElementById('menu-mapa-general').style.display = 'flex';
+}
+
+function configurarControlesTactilesMapa() {
+  const esTactil = ('ontouchstart' in window) || navigator.maxTouchPoints > 0 || window.matchMedia('(pointer: coarse)').matches;
+  if (!esTactil) return;
+  document.getElementById('controles-tactiles-mapa').style.display = 'block';
+  document.getElementById('btn-mapa-izq').addEventListener('pointerdown', (e) => { e.preventDefault(); moverSeleccion(-1); });
+  document.getElementById('btn-mapa-der').addEventListener('pointerdown', (e) => { e.preventDefault(); moverSeleccion(1); });
+  document.getElementById('btn-mapa-entrar').addEventListener('pointerdown', (e) => { e.preventDefault(); entrarEnNodo(); });
+}
+
+function update() {}
+
+function dibujarRosaDeLosVientos(escena, cx, cy) {
+  const g = escena.add.graphics().setScrollFactor(0);
+  g.lineStyle(2, PALETA.tinta, 0.7);
+  g.strokeCircle(cx, cy, 26);
+  g.fillStyle(PALETA.tinta, 0.85);
+  g.fillTriangle(cx, cy - 24, cx - 6, cy, cx + 6, cy);
+  g.fillTriangle(cx, cy + 24, cx - 6, cy, cx + 6, cy);
+  g.fillTriangle(cx - 24, cy, cx, cy - 6, cx, cy + 6);
+  g.fillTriangle(cx + 24, cy, cx, cy - 6, cx, cy + 6);
+  escena.add.text(cx, cy - 38, 'N', { fontSize: '12px', color: '#5a4632' }).setOrigin(0.5).setScrollFactor(0);
+}
+
+function dibujarPunteado(g, x1, y1, x2, y2) {
+  const dist = Phaser.Math.Distance.Between(x1, y1, x2, y2);
+  const pasos = Math.floor(dist / 22);
+  for (let i = 1; i < pasos; i++) {
+    const t = i / pasos;
+    g.fillCircle(x1 + (x2 - x1) * t, y1 + (y2 - y1) * t, 4);
+  }
+}
+
+function dibujarNodo(escena, nodo, indice) {
+  const g = escena.add.graphics();
+  if (nodo.tipo === 'nivel') {
+    const relleno = nodo.estado === 'jugable' ? PALETA.nodoJugable : PALETA.nodoPendiente;
+    const borde = nodo.estado === 'jugable' ? PALETA.nodoJugableBorde : PALETA.nodoPendienteBorde;
+    g.fillStyle(relleno, 1); g.fillCircle(nodo.x, nodo.y, 26);
+    g.lineStyle(4, borde, 1); g.strokeCircle(nodo.x, nodo.y, 26);
+    if (nodo.estado === 'bloqueado_progreso') {
+      g.fillStyle(0x5a4632, 1);
+      g.fillRoundedRect(nodo.x - 7, nodo.y - 1, 14, 10, 2);
+      g.lineStyle(2.5, 0x5a4632, 1);
+      g.beginPath(); g.arc(nodo.x, nodo.y - 3, 5, Math.PI, 0, false); g.strokePath();
+    } else {
+      escena.add.text(nodo.x, nodo.y, String(nodo.num), { fontSize: '22px', color: '#2c3b2e', fontStyle: 'bold' }).setOrigin(0.5);
+    }
+    let etiqueta = t('pendiente');
+    if (nodo.estado === 'jugable') etiqueta = nodo.nombre;
+    else if (nodo.estado === 'bloqueado_progreso') etiqueta = t('bloqueado_progreso');
+    escena.add.text(nodo.x, nodo.y + 40, etiqueta, { fontSize: '12px', color: '#274a52', fontStyle: nodo.estado === 'jugable' ? 'italic' : 'normal', align: 'center', wordWrap: { width: 110 } }).setOrigin(0.5);
+  } else if (nodo.tipo === 'jefe') {
+    g.fillStyle(nodo.estado === 'jugable' ? PALETA.jefe : PALETA.nodoBloqueado, 1); g.fillRoundedRect(nodo.x - 26, nodo.y - 22, 52, 44, 6);
+    g.fillTriangle(nodo.x - 26, nodo.y - 22, nodo.x - 10, nodo.y - 38, nodo.x + 6, nodo.y - 22);
+    g.fillTriangle(nodo.x - 6, nodo.y - 22, nodo.x + 10, nodo.y - 38, nodo.x + 26, nodo.y - 22);
+    g.fillStyle(0x3a2a2a, 1); g.fillRect(nodo.x - 6, nodo.y - 4, 12, 26);
+    const etiquetaJefe = nodo.estado === 'jugable' ? nodo.nombre : t('jefe_misterioso');
+    escena.add.text(nodo.x, nodo.y + 40, etiquetaJefe, { fontSize: '12px', color: '#274a52', fontStyle: 'italic', align: 'center', wordWrap: { width: 110 } }).setOrigin(0.5);
+  } else {
+    dibujarTerrenoMundo(g, nodo.num, nodo.x, nodo.y);
+    g.lineStyle(2, PALETA.tintaSuave, 0.6);
+    dibujarCirculoDiscontinuo(g, nodo.x, nodo.y, 95);
+    g.fillStyle(PALETA.nodoBloqueado, 1); g.fillCircle(nodo.x, nodo.y, 24);
+    g.lineStyle(4, PALETA.nodoBloqueadoBorde, 1); g.strokeCircle(nodo.x, nodo.y, 24);
+    g.fillStyle(0x5a4632, 1);
+    g.fillRoundedRect(nodo.x - 8, nodo.y - 2, 16, 12, 2);
+    g.lineStyle(3, 0x5a4632, 1);
+    g.beginPath(); g.arc(nodo.x, nodo.y - 4, 6, Math.PI, 0, false); g.strokePath();
+
+    const gNiebla = escena.add.graphics();
+    dibujarNieblaMorada(gNiebla, nodo.x, nodo.y);
+    nodo.nieblaGraphics = gNiebla;
+    nodo.textoNombre = escena.add.text(nodo.x, nodo.y + 38, '', {
+      fontSize: '13px', fontStyle: 'italic bold', color: '#fff6d8', stroke: '#2c1a0a', strokeThickness: 3
+    }).setOrigin(0.5).setAlpha(0);
+  }
+}
+
+function disiparNiebla(nodo) {
+  if (!nodo.nieblaGraphics) return;
+  const niebla = nodo.nieblaGraphics;
+  nodo.nieblaGraphics = null;
+  sfxNiebla();
+  escenaActiva.tweens.add({
+    targets: niebla, alpha: 0, duration: 1100, ease: 'Sine.easeIn',
+    onComplete: () => niebla.destroy()
+  });
+  if (nodo.textoNombre) {
+    nodo.textoNombre.setText(NOMBRES_MUNDO[nodo.num] || ('Mundo ' + nodo.num));
+    escenaActiva.tweens.add({ targets: nodo.textoNombre, alpha: 1, duration: 900, delay: 500 });
+  }
+}
+
+function dibujarNieblaMorada(g, cx, cy) {
+  g.fillStyle(PALETA_NIEBLA.medio, 0.72);
+  g.fillEllipse(cx, cy, 260, 170);
+  g.fillStyle(PALETA_NIEBLA.oscuro, 0.5);
+  g.fillEllipse(cx - 60, cy - 20, 140, 90);
+  g.fillEllipse(cx + 70, cy + 20, 150, 100);
+  g.fillEllipse(cx, cy + 50, 180, 70);
+  g.fillStyle(PALETA_NIEBLA.claro, 0.45);
+  g.fillEllipse(cx - 30, cy + 10, 110, 60);
+  g.fillEllipse(cx + 40, cy - 30, 100, 60);
+}
+
+function dibujarCirculoDiscontinuo(g, cx, cy, r) {
+  const pasos = 40;
+  for (let i = 0; i < pasos; i += 2) {
+    const a1 = (i / pasos) * Math.PI * 2, a2 = ((i + 1) / pasos) * Math.PI * 2;
+    g.beginPath();
+    g.moveTo(cx + Math.cos(a1) * r, cy + Math.sin(a1) * r * 0.6);
+    g.lineTo(cx + Math.cos(a2) * r, cy + Math.sin(a2) * r * 0.6);
+    g.strokePath();
+  }
+}
+
+function dibujarTerrenoMundo(g, num, cx, cy) {
+  const b = BIOMAS[num];
+  if (num === 2) { // Tormenta en la Playa
+    g.fillStyle(b.base, 1); g.fillEllipse(cx, cy + 60, 240, 90);
+    g.fillStyle(b.oscuro, 1); g.fillEllipse(cx, cy + 90, 260, 50);
+    g.fillStyle(b.detalle, 1);
+    for (let i = -1; i <= 1; i++) g.fillEllipse(cx + i * 60, cy + 78, 40, 10);
+  } else if (num === 3) { // Desierto Arenoso
+    g.fillStyle(b.base, 1); g.fillEllipse(cx, cy + 70, 260, 100);
+    g.fillStyle(b.oscuro, 1); g.fillEllipse(cx - 60, cy + 90, 140, 46); g.fillEllipse(cx + 70, cy + 100, 140, 40);
+    g.fillStyle(b.detalle, 1); g.fillRect(cx + 90, cy + 30, 6, 34); g.fillRect(cx + 80, cy + 44, 6, 20);
+  } else if (num === 4) { // Lago Siniestro
+    g.fillStyle(b.oscuro, 1); g.fillEllipse(cx, cy + 70, 250, 100);
+    g.fillStyle(b.base, 1); g.fillEllipse(cx, cy + 70, 200, 74);
+    g.fillStyle(b.detalle, 1);
+    for (let i = -1; i <= 1; i++) g.fillRect(cx + i * 44, cy + 40, 4, 24);
+  } else if (num === 5) { // Bosque Frondoso
+    g.fillStyle(b.base, 1); g.fillEllipse(cx, cy + 70, 250, 100);
+    g.fillStyle(b.oscuro, 1);
+    [-70, -20, 30, 80].forEach((dx) => { g.fillCircle(cx + dx, cy + 40, 26); });
+    g.fillStyle(b.detalle, 1);
+    [-70, -20, 30, 80].forEach((dx) => { g.fillCircle(cx + dx, cy + 30, 16); });
+  } else if (num === 6) { // Montaña Gélida
+    g.fillStyle(b.oscuro, 1);
+    g.fillTriangle(cx - 90, cy + 90, cx - 30, cy - 10, cx + 20, cy + 90);
+    g.fillTriangle(cx - 10, cy + 90, cx + 50, cy - 30, cx + 100, cy + 90);
+    g.fillStyle(b.detalle, 1);
+    g.fillTriangle(cx - 55, cy + 34, cx - 30, cy - 10, cx - 6, cy + 34);
+    g.fillTriangle(cx + 30, cy + 18, cx + 50, cy - 30, cx + 68, cy + 18);
+  } else if (num === 7) { // Pantano Mágico
+    g.fillStyle(b.base, 1); g.fillEllipse(cx, cy + 70, 250, 96);
+    g.fillStyle(b.oscuro, 1); g.fillEllipse(cx - 60, cy + 80, 90, 40); g.fillEllipse(cx + 70, cy + 88, 100, 36);
+    g.fillStyle(b.detalle, 1); g.fillRect(cx, cy + 20, 5, 50); g.fillCircle(cx - 6, cy + 18, 9); g.fillCircle(cx + 8, cy + 26, 8);
+  } else if (num === 8) { // Volcán Candente
+    g.fillStyle(b.oscuro, 1); g.fillTriangle(cx - 80, cy + 90, cx, cy - 40, cx + 80, cy + 90);
+    g.fillStyle(b.base, 1); g.fillTriangle(cx - 20, cy + 90, cx, cy + 20, cx + 20, cy + 90);
+    g.fillStyle(b.detalle, 0.7); g.fillEllipse(cx, cy - 55, 30, 18); g.fillEllipse(cx + 12, cy - 72, 22, 14);
+  }
+}
+
+function moverSeleccion(direccion) {
+  if (enMovimiento || menuMapaAbierto) return;
+  const nuevoIndice = Phaser.Math.Clamp(indiceActual + direccion, 0, NODOS.length - 1);
+  if (nuevoIndice === indiceActual) return;
+  if (!modoCreador && nuevoIndice > indiceMaximoAlcanzable) {
+    mostrarAviso(t('bloqueado_progreso_aviso'));
+    return;
+  }
+  indiceActual = nuevoIndice;
+  const destino = NODOS[indiceActual];
+  personaje.setFlipX(direccion < 0);
+  enMovimiento = true;
+  sfxPaso();
+
+  const eventoAnimacion = escenaActiva.time.addEvent({
+    delay: 100, loop: true,
+    callback: () => { personaje.setTexture(Math.floor(escenaActiva.time.now / 100) % 2 === 0 ? 'personaje_mapa_correr1' : 'personaje_mapa_correr2'); }
+  });
+
+  escenaActiva.tweens.add({
+    targets: personaje, x: destino.x, y: destino.y - 30, duration: 220, ease: 'Sine.easeInOut',
+    onComplete: () => {
+      enMovimiento = false;
+      eventoAnimacion.remove();
+      personaje.setTexture('personaje_mapa_idle');
+      reproducirMusica(obtenerMelodiaNodo(destino));
+    }
+  });
+}
+
+function entrarEnNodo() {
+  if (menuMapaAbierto) return;
+  const nodo = NODOS[indiceActual];
+  if ((nodo.tipo === 'nivel' || nodo.tipo === 'jefe') && nodo.estado === 'jugable') {
+    sfxEntrar();
+    window.location.href = nodo.archivo;
+    return;
+  }
+  let mensaje = t('bloqueado_mundo');
+  if (nodo.tipo === 'nivel' && nodo.estado === 'bloqueado_progreso') mensaje = t('bloqueado_progreso_aviso');
+  else if (nodo.tipo === 'nivel') mensaje = t('bloqueado_nivel');
+  else if (nodo.tipo === 'jefe' && nodo.estado === 'pendiente') mensaje = t('bloqueado_nivel');
+  else if (nodo.tipo === 'jefe') mensaje = t('bloqueado_jefe');
+  else mensaje = t('bloqueado_mundo');
+  sfxBloqueado();
+  mostrarAviso(mensaje);
+}
+
+function mostrarAviso(mensaje) {
+  textoAviso.setText(mensaje);
+  textoAviso.setVisible(true);
+  textoAvisoFondo.setVisible(true);
+  escenaActiva.time.delayedCall(1400, () => {
+    textoAviso.setVisible(false);
+    textoAvisoFondo.setVisible(false);
+  });
+}
+</script>
+</body>
+</html>

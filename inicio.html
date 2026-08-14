@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cripta Neon</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; background: #f2ecd8; min-height: 100vh;
+    font-family: -apple-system, sans-serif; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; overflow-x: hidden;
+  }
+  #game-wrap { position: relative; max-width: 100%; border-radius: 10px; overflow: hidden; box-shadow: 0 0 24px rgba(40,80,90,0.3); }
+  #game-container canvas { max-width: 100%; height: auto; display: block; }
+
+  #botones {
+    position: absolute; left: 0; right: 0; bottom: 46px; display: flex; flex-direction: column;
+    align-items: center; gap: 14px; z-index: 5;
+  }
+  .btn-inicio {
+    width: 200px; padding: 14px 0; text-align: center; border-radius: 12px; cursor: pointer;
+    font-size: 20px; font-weight: 800; letter-spacing: 1px; border: 3px solid #2c6b3a;
+    box-shadow: 0 4px 0 #2c6b3a; user-select: none; font-family: -apple-system, sans-serif;
+  }
+  #btn-jugar { background: #ffe066; color: #2c3b2e; }
+  #btn-jugar:active { transform: translateY(3px); box-shadow: 0 1px 0 #2c6b3a; }
+  #btn-opciones { background: #ffffffcc; color: #2c3b2e; font-size: 16px; padding: 10px 0; }
+  #btn-opciones:active { transform: translateY(3px); box-shadow: 0 1px 0 #2c6b3a; }
+
+  .overlay-inicio {
+    position: absolute; inset: 0; background: rgba(20,30,20,0.88); display: none;
+    align-items: center; justify-content: center; flex-direction: column; z-index: 10; color: #f0e6c8;
+  }
+  .overlay-inicio h2 { color: #ffe066; margin: 0 0 10px; }
+  .overlay-inicio p { max-width: 320px; text-align: center; color: #e8f5e8; font-size: 14px; }
+  .cerrar-overlay-inicio {
+    margin-top: 14px; background: transparent; border: 1px solid #e8f5e8; color: #e8f5e8;
+    padding: 6px 16px; border-radius: 6px; cursor: pointer;
+  }
+  .fila-opcion {
+    display: flex; align-items: center; justify-content: space-between; width: 280px;
+    margin: 8px 0; font-size: 14px;
+  }
+  .botones-idioma { display: flex; gap: 6px; }
+  .btn-idioma {
+    background: transparent; border: 1px solid #e8f5e8; color: #e8f5e8; border-radius: 6px;
+    padding: 4px 8px; font-size: 12px; cursor: pointer; font-weight: 700;
+  }
+  .btn-idioma.activo { background: #ffe066; color: #2c3b2e; border-color: #ffe066; }
+  .btn-sonido {
+    background: transparent; border: 1px solid #e8f5e8; color: #e8f5e8; border-radius: 6px;
+    padding: 4px 10px; font-size: 12px; cursor: pointer;
+  }
+</style>
+</head>
+<body>
+<div id="game-wrap">
+  <div id="game-container"></div>
+  <div id="botones">
+    <div class="btn-inicio" id="btn-jugar">JUGAR</div>
+    <div class="btn-inicio" id="btn-opciones">OPCIONES</div>
+  </div>
+  <div class="overlay-inicio" id="overlay-opciones">
+    <h2 id="txt-tit-opciones">Opciones</h2>
+    <div class="fila-opcion">
+      <span id="txt-idioma-label">Idioma</span>
+      <div class="botones-idioma">
+        <button class="btn-idioma" data-idioma="es">ES</button>
+        <button class="btn-idioma" data-idioma="en">EN</button>
+        <button class="btn-idioma" data-idioma="fr">FR</button>
+        <button class="btn-idioma" data-idioma="it">IT</button>
+      </div>
+    </div>
+    <div class="fila-opcion">
+      <span id="txt-sonido-label">Sonido</span>
+      <div class="btn-sonido" id="btn-sonido">Activado</div>
+    </div>
+    <p id="txt-opciones-explicacion">Aqui llegaran mas adelante los ajustes de sonido, idioma y mandos. De momento el juego se controla con teclado o con los botones tactiles en movil/tablet.</p>
+    <button class="cerrar-overlay-inicio" id="cerrar-opciones">Cerrar</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.70.0/phaser.min.js" crossorigin="anonymous"></script>
+<script>
+
+const VIEW_W = 800, VIEW_H = 450;
+const COSMETICOS = { colorCuerpo: 0x4fb8e0, colorGuantes: 0xf4ead8, colorZapatillas: 0xffd76a, colorMejillas: 0xff9a9a };
+const PALETA = {
+  cielo: 0x8fd3f4, sol: 0xffe066, nube: 0xffffff,
+  colinaLejos: 0x9fe08f, colinaCerca: 0x7fcf6a, arbusto: 0x3f7a38,
+  tierra: 0x8a5a3c, hierba: 0x6bbf59
+};
+
+const TRADUCCIONES = {
+  es: { jugar: 'JUGAR', opciones: 'OPCIONES', tit_opciones: 'Opciones', texto_opciones: 'Aqui llegaran mas adelante los ajustes de sonido, idioma y mandos. De momento el juego se controla con teclado o con los botones tactiles en movil/tablet.', cerrar: 'Cerrar', idioma: 'Idioma', sonido: 'Sonido', sonido_on: 'Activado', sonido_off: 'Silenciado', y_mas_alla: ' y mas alla', provisional: '(vista provisional, la construiremos pronto!)' },
+  en: { jugar: 'PLAY', opciones: 'OPTIONS', tit_opciones: 'Options', texto_opciones: 'Sound, language and controller settings are coming soon. For now the game is played with keyboard or the on-screen touch buttons on mobile/tablet.', cerrar: 'Close', idioma: 'Language', sonido: 'Sound', sonido_on: 'On', sonido_off: 'Muted', y_mas_alla: ' and beyond', provisional: '(temporary preview, coming soon!)' },
+  fr: { jugar: 'JOUER', opciones: 'OPTIONS', tit_opciones: 'Options', texto_opciones: 'Les reglages de son, de langue et de manette arriveront bientot. Pour le moment, le jeu se joue au clavier ou avec les boutons tactiles sur mobile/tablette.', cerrar: 'Fermer', idioma: 'Langue', sonido: 'Son', sonido_on: 'Active', sonido_off: 'Coupe', y_mas_alla: ' et au-dela', provisional: '(apercu provisoire, bientot pret !)' },
+  it: { jugar: 'GIOCA', opciones: 'OPZIONI', tit_opciones: 'Opzioni', texto_opciones: 'Le impostazioni di audio, lingua e controller arriveranno presto. Per ora il gioco si controlla con la tastiera o con i pulsanti touch su mobile/tablet.', cerrar: 'Chiudi', idioma: 'Lingua', sonido: 'Audio', sonido_on: 'Attivo', sonido_off: 'Muto', y_mas_alla: ' e oltre', provisional: '(anteprima provvisoria, presto pronta!)' }
+};
+
+let idiomaActual = localStorage.getItem('cripta_neon_idioma') || 'es';
+let sonidoActivado = localStorage.getItem('cripta_neon_sonido') !== 'no';
+
+function t(clave) { return (TRADUCCIONES[idiomaActual] && TRADUCCIONES[idiomaActual][clave]) || TRADUCCIONES.es[clave] || clave; }
+
+function cambiarIdioma(codigo) {
+  idiomaActual = codigo;
+  localStorage.setItem('cripta_neon_idioma', codigo);
+  aplicarIdioma();
+}
+
+function alternarSonido() {
+  sonidoActivado = !sonidoActivado;
+  localStorage.setItem('cripta_neon_sonido', sonidoActivado ? 'si' : 'no');
+  if (!sonidoActivado) detenerMusica(); else reproducirMusica(obtenerMelodiaPorMundoGuardado());
+  aplicarIdioma();
+}
+
+// ---- motor de audio sintetizado (sin archivos externos) ----
+let audioCtx = null;
+function obtenerAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+function tono(frecuencia, duracion, tipo, volumen, cuando) {
+  if (!sonidoActivado) return;
+  const ctx = obtenerAudioCtx();
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = tipo || 'square';
+  osc.frequency.value = frecuencia;
+  const inicio = ctx.currentTime + (cuando || 0);
+  gain.gain.setValueAtTime(0.0001, inicio);
+  gain.gain.linearRampToValueAtTime(volumen || 0.14, inicio + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.0001, inicio + duracion);
+  osc.connect(gain); gain.connect(ctx.destination);
+  osc.start(inicio); osc.stop(inicio + duracion + 0.03);
+}
+function sfxMenu() { tono(600, 0.05, 'square', 0.07); }
+function sfxJugar() { tono(660, 0.1, 'triangle', 0.11); tono(880, 0.14, 'triangle', 0.1, 0.08); tono(1100, 0.16, 'triangle', 0.1, 0.16); }
+
+const MELODIA_INICIO = [
+  { f: 262, d: 0.18 }, { f: 330, d: 0.18 }, { f: 392, d: 0.18 }, { f: 523, d: 0.26 },
+  { f: 392, d: 0.18 }, { f: 440, d: 0.18 }, { f: 523, d: 0.18 }, { f: 659, d: 0.3 },
+  { f: 587, d: 0.18 }, { f: 523, d: 0.18 }, { f: 440, d: 0.18 }, { f: 392, d: 0.26 },
+  { f: 330, d: 0.18 }, { f: 392, d: 0.18 }, { f: 440, d: 0.18 }, { f: 523, d: 0.42 }
+];
+
+const MELODIAS_MUNDO = {
+  2: [ // Tormenta en la Playa
+    { f: 294, d: 0.3, tipo: 'sine' }, { f: 349, d: 0.3, tipo: 'sine' }, { f: 440, d: 0.3, tipo: 'sine' }, { f: 349, d: 0.3, tipo: 'sine' },
+    { f: 262, d: 0.3, tipo: 'sine' }, { f: 349, d: 0.3, tipo: 'sine' }, { f: 392, d: 0.5, tipo: 'sine' }
+  ],
+  3: [ // Desierto Arenoso
+    { f: 293, d: 0.5, tipo: 'triangle' }, { f: 311, d: 0.3, tipo: 'triangle' }, { f: 415, d: 0.5, tipo: 'triangle' },
+    { f: 466, d: 0.3, tipo: 'triangle' }, { f: 415, d: 0.5, tipo: 'triangle' }, { f: 311, d: 0.6, tipo: 'triangle' }
+  ],
+  4: [ // Lago Siniestro
+    { f: 174, d: 0.7, tipo: 'sine' }, { f: 207, d: 0.6, tipo: 'sine' }, { f: 155, d: 0.8, tipo: 'sine' },
+    { f: 196, d: 0.7, tipo: 'sine' }, { f: 174, d: 0.9, tipo: 'sine' }
+  ],
+  5: [ // Bosque Frondoso
+    { f: 349, d: 0.22, tipo: 'triangle' }, { f: 440, d: 0.22, tipo: 'triangle' }, { f: 523, d: 0.22, tipo: 'triangle' }, { f: 440, d: 0.22, tipo: 'triangle' },
+    { f: 392, d: 0.22, tipo: 'triangle' }, { f: 523, d: 0.22, tipo: 'triangle' }, { f: 587, d: 0.35, tipo: 'triangle' }
+  ],
+  6: [ // Montaña Gelida
+    { f: 784, d: 0.35, tipo: 'sine' }, { f: 0, d: 0.2 }, { f: 659, d: 0.35, tipo: 'sine' }, { f: 0, d: 0.2 },
+    { f: 880, d: 0.5, tipo: 'sine' }, { f: 0, d: 0.3 }, { f: 587, d: 0.5, tipo: 'sine' }
+  ],
+  7: [ // Pantano Magico
+    { f: 233, d: 0.4, tipo: 'triangle' }, { f: 247, d: 0.4, tipo: 'triangle' }, { f: 311, d: 0.4, tipo: 'triangle' },
+    { f: 277, d: 0.4, tipo: 'triangle' }, { f: 233, d: 0.6, tipo: 'triangle' }
+  ],
+  8: [ // Volcan Candente
+    { f: 330, d: 0.15, tipo: 'sawtooth' }, { f: 392, d: 0.15, tipo: 'sawtooth' }, { f: 466, d: 0.15, tipo: 'sawtooth' }, { f: 392, d: 0.15, tipo: 'sawtooth' },
+    { f: 330, d: 0.15, tipo: 'sawtooth' }, { f: 466, d: 0.15, tipo: 'sawtooth' }, { f: 554, d: 0.25, tipo: 'sawtooth' }
+  ]
+};
+
+function obtenerMelodiaPorMundoGuardado() {
+  return mundoActual === 1 ? MELODIA_INICIO : (MELODIAS_MUNDO[mundoActual] || MELODIA_INICIO);
+}
+
+let musicaTimer = null;
+function reproducirMusica(notas) {
+  detenerMusica();
+  let i = 0;
+  const paso = () => {
+    if (!sonidoActivado) { musicaTimer = setTimeout(paso, 300); return; }
+    const nota = notas[i % notas.length];
+    tono(nota.f, nota.d * 0.85, 'triangle', 0.045);
+    i++;
+    musicaTimer = setTimeout(paso, nota.d * 1000);
+  };
+  paso();
+}
+function detenerMusica() { if (musicaTimer) clearTimeout(musicaTimer); musicaTimer = null; }
+function iniciarAudioConGesto() {
+  const arrancar = () => { obtenerAudioCtx(); if (sonidoActivado) reproducirMusica(obtenerMelodiaPorMundoGuardado()); quitarListeners(); };
+  const quitarListeners = () => {
+    window.removeEventListener('pointerdown', arrancar);
+    window.removeEventListener('keydown', arrancar);
+    window.removeEventListener('pointermove', arrancar);
+    window.removeEventListener('touchstart', arrancar);
+  };
+  window.addEventListener('pointerdown', arrancar);
+  window.addEventListener('keydown', arrancar);
+  window.addEventListener('pointermove', arrancar);
+  window.addEventListener('touchstart', arrancar);
+}
+
+const config = {
+  type: Phaser.AUTO,
+  width: VIEW_W,
+  height: VIEW_H,
+  parent: 'game-container',
+  backgroundColor: '#8fd3f4',
+  scene: { preload, create }
+};
+
+const juego = new Phaser.Game(config);
+juego.events.once('ready', () => {
+  if (juego.canvas) { juego.canvas.setAttribute('tabindex', '0'); juego.canvas.focus(); }
+});
+document.getElementById('game-container').addEventListener('pointerdown', () => {
+  if (juego.canvas) juego.canvas.focus();
+});
+
+function preload() {
+  const g = this.add.graphics();
+  const forma = (dibujar, w, h, key) => { g.clear(); dibujar(); g.generateTexture(key, w, h); };
+
+  const cara = (cx, cy) => {
+    g.fillCircle(cx, cy, 19);
+    g.fillStyle(COSMETICOS.colorMejillas, 1); g.fillCircle(cx - 11, cy + 4, 4); g.fillCircle(cx + 11, cy + 4, 4);
+    g.fillStyle(0xffffff, 1); g.fillCircle(cx - 6, cy - 3, 7); g.fillCircle(cx + 6, cy - 3, 7);
+    g.fillStyle(0x1b1230, 1); g.fillCircle(cx - 5, cy - 2, 3.4); g.fillCircle(cx + 7, cy - 2, 3.4);
+    g.lineStyle(2.5, 0x1b1230, 1);
+    g.beginPath(); g.arc(cx, cy + 4, 6, 0.2, Math.PI - 0.2, false); g.strokePath();
+  };
+
+  forma(() => {
+    g.fillStyle(COSMETICOS.colorCuerpo, 1); g.fillRoundedRect(4, 26, 26, 26, 10); cara(17, 20);
+    g.fillStyle(COSMETICOS.colorGuantes, 1); g.fillCircle(4, 40, 7); g.fillCircle(30, 40, 7);
+    g.fillStyle(COSMETICOS.colorZapatillas, 1); g.fillRoundedRect(0, 46, 14, 8, 3); g.fillRoundedRect(20, 50, 14, 8, 3);
+  }, 34, 58, 'personaje_correr1');
+
+  forma(() => {
+    g.fillStyle(COSMETICOS.colorCuerpo, 1); g.fillRoundedRect(4, 26, 26, 26, 10); cara(17, 20);
+    g.fillStyle(COSMETICOS.colorGuantes, 1); g.fillCircle(4, 40, 7); g.fillCircle(30, 40, 7);
+    g.fillStyle(COSMETICOS.colorZapatillas, 1); g.fillRoundedRect(2, 50, 14, 8, 3); g.fillRoundedRect(18, 46, 14, 8, 3);
+  }, 34, 58, 'personaje_correr2');
+
+  forma(() => {
+    g.fillStyle(0x6fae52, 1); g.fillEllipse(6, 4, 12, 7);
+  }, 12, 8, 'hoja');
+
+  g.destroy();
+}
+
+const NOMBRES_MUNDO = {
+  1: 'Pradera Serena', 2: 'Tormenta en la Playa', 3: 'Desierto Arenoso', 4: 'Lago Siniestro',
+  5: 'Bosque Frondoso', 6: 'Montaña Gelida', 7: 'Pantano Magico', 8: 'Volcan Candente'
+};
+const COLORES_MUNDO = {
+  2: { cielo: 0x6a92b0, suelo: 0x8a9aa0 }, 3: { cielo: 0xe8d8a0, suelo: 0xd8c078 },
+  4: { cielo: 0x4a6070, suelo: 0x2f4f5f }, 5: { cielo: 0x6a9060, suelo: 0x3a5f3a },
+  6: { cielo: 0xcfe0ea, suelo: 0xdfeaf0 }, 7: { cielo: 0x6a7a5a, suelo: 0x4a5c3f },
+  8: { cielo: 0x8a4a3a, suelo: 0x5a2a1a }
+};
+
+let arbolesX = [];
+let subtituloGlobal = null;
+let mundoActual = 1;
+
+function create() {
+  let guardado = null;
+  try { guardado = JSON.parse(localStorage.getItem('cripta_neon_guardado')); } catch (e) { guardado = null; }
+  mundoActual = (guardado && guardado.mundo) || 1;
+
+  const fondo = this.add.graphics();
+
+  if (mundoActual === 1) {
+    // fondo pradera
+    fondo.fillStyle(PALETA.sol, 1); fondo.fillCircle(680, 80, 44);
+    fondo.fillStyle(0xfff3b0, 0.6); fondo.fillCircle(680, 80, 58);
+    fondo.fillStyle(PALETA.nube, 0.9);
+    [[120, 70], [340, 100], [560, 60]].forEach(([x, y]) => {
+      fondo.fillEllipse(x, y, 60, 22); fondo.fillEllipse(x + 30, y - 8, 40, 18); fondo.fillEllipse(x - 26, y + 4, 40, 16);
+    });
+    fondo.fillStyle(PALETA.colinaLejos, 1);
+    fondo.fillEllipse(150, 420, 320, 140); fondo.fillEllipse(560, 400, 340, 150); fondo.fillEllipse(820, 430, 300, 140);
+    fondo.fillStyle(PALETA.colinaCerca, 1);
+    fondo.fillEllipse(80, 450, 260, 110); fondo.fillEllipse(420, 440, 280, 110); fondo.fillEllipse(720, 460, 260, 110);
+    fondo.fillStyle(PALETA.tierra, 1); fondo.fillRect(0, 400, VIEW_W, 50);
+    fondo.fillStyle(PALETA.hierba, 1); fondo.fillRect(0, 392, VIEW_W, 12);
+    fondo.fillStyle(PALETA.arbusto, 1);
+    for (let x = 30; x < VIEW_W; x += 130) { fondo.fillCircle(x, 396, 13); fondo.fillCircle(x + 14, 399, 10); fondo.fillCircle(x - 12, 399, 9); }
+
+    // arbolitos (guardamos su x para el efecto de hojas cayendo)
+    arbolesX = [230, 480, 730];
+    arbolesX.forEach((x) => {
+      fondo.fillStyle(0x6b4a2c, 1); fondo.fillRect(x - 4, 360, 8, 32);
+      fondo.fillStyle(PALETA.colinaCerca, 1); fondo.fillCircle(x, 348, 26);
+      fondo.fillStyle(PALETA.arbusto, 1); fondo.fillCircle(x - 8, 340, 16);
+    });
+  } else {
+    // vista provisional del mundo guardado (aun no construido del todo)
+    const c = COLORES_MUNDO[mundoActual] || COLORES_MUNDO[2];
+    fondo.fillStyle(c.cielo, 1); fondo.fillRect(0, 0, VIEW_W, VIEW_H);
+    fondo.fillStyle(c.suelo, 1); fondo.fillRect(0, 380, VIEW_W, 70);
+    this.add.text(VIEW_W / 2, 250, t('provisional'), {
+      fontSize: '13px', fontStyle: 'italic', color: '#f0ede0'
+    }).setOrigin(0.5).setAlpha(0.85);
+  }
+
+  // titulo con entrada animada
+  const titulo = this.add.text(VIEW_W / 2, 90, 'CRIPTA NEON', {
+    fontSize: '52px', fontStyle: 'bold', color: '#ffffff', stroke: '#2c6b3a', strokeThickness: 8
+  }).setOrigin(0.5).setScale(0);
+  this.tweens.add({ targets: titulo, scale: 1, duration: 700, ease: 'Back.easeOut' });
+  this.tweens.add({ targets: titulo, angle: { from: -2, to: 2 }, duration: 1600, yoyo: true, repeat: -1, delay: 700, ease: 'Sine.easeInOut' });
+
+  subtituloGlobal = this.add.text(VIEW_W / 2, 140, NOMBRES_MUNDO[mundoActual] + t('y_mas_alla'), {
+    fontSize: '16px', fontStyle: 'italic', color: '#2c3b2e'
+  }).setOrigin(0.5).setAlpha(0);
+  this.tweens.add({ targets: subtituloGlobal, alpha: 1, duration: 500, delay: 500 });
+
+  // pajaros volando por el fondo
+  const dibujarPajaro = (x, y) => {
+    const p = this.add.graphics();
+    p.lineStyle(2, 0x3a5a2c, 0.8);
+    p.beginPath(); p.arc(x - 6, y, 6, Math.PI, 0, false); p.strokePath();
+    p.beginPath(); p.arc(x + 6, y, 6, Math.PI, 0, true); p.strokePath();
+    return p;
+  };
+  [[0, 60, 5200], [200, 40, 6400], [-150, 75, 5800]].forEach(([xIni, y, dur]) => {
+    const pajaro = dibujarPajaro(xIni, y);
+    this.tweens.add({ targets: pajaro, x: VIEW_W + 80, duration: dur, repeat: -1, delay: xIni * 4, onRepeat: () => { pajaro.x = -80; } });
+  });
+
+  // particulas brillantes flotando
+  for (let i = 0; i < 18; i++) {
+    const px = Math.random() * VIEW_W;
+    const py = 60 + Math.random() * 340;
+    const particula = this.add.circle(px, py, 1.6 + Math.random() * 1.4, 0xffffff, 0.8);
+    this.tweens.add({
+      targets: particula, y: py - 60 - Math.random() * 40, alpha: 0,
+      duration: 2500 + Math.random() * 2000, delay: Math.random() * 3000, repeat: -1,
+      onRepeat: () => { particula.y = py; particula.setAlpha(0.8); }
+    });
+  }
+
+  // personaje caminando de un lado a otro, con salto heroico de vez en cuando
+  const personaje = this.add.image(120, 372, 'personaje_correr1');
+  let mirandoDerecha = true;
+  this.tweens.add({
+    targets: personaje, x: 660, duration: 3200, ease: 'Linear', yoyo: true, repeat: -1,
+    onYoyo: () => { mirandoDerecha = !mirandoDerecha; personaje.setFlipX(!mirandoDerecha); },
+    onRepeat: () => { mirandoDerecha = !mirandoDerecha; personaje.setFlipX(!mirandoDerecha); }
+  });
+  this.time.addEvent({
+    delay: 130, loop: true,
+    callback: () => { personaje.setTexture(Math.floor(this.time.now / 130) % 2 === 0 ? 'personaje_correr1' : 'personaje_correr2'); }
+  });
+  this.time.addEvent({
+    delay: 2600, loop: true,
+    callback: () => {
+      this.tweens.add({ targets: personaje, y: 340, duration: 260, yoyo: true, ease: 'Quad.easeOut' });
+    }
+  });
+
+  document.getElementById('btn-jugar').addEventListener('pointerdown', () => { sfxJugar(); window.location.href = 'mapa_mundos_v28.html'; });
+  document.getElementById('btn-opciones').addEventListener('pointerdown', () => { sfxMenu(); document.getElementById('overlay-opciones').style.display = 'flex'; });
+  document.getElementById('cerrar-opciones').addEventListener('pointerdown', () => { sfxMenu(); document.getElementById('overlay-opciones').style.display = 'none'; });
+
+  document.querySelectorAll('.btn-idioma').forEach((boton) => {
+    boton.addEventListener('pointerdown', () => cambiarIdioma(boton.dataset.idioma));
+  });
+  document.getElementById('btn-sonido').addEventListener('pointerdown', alternarSonido);
+
+  aplicarIdioma();
+  configurarEventoAmbiental(this, mundoActual);
+  iniciarAudioConGesto();
+}
+
+function aplicarIdioma() {
+  document.getElementById('btn-jugar').textContent = t('jugar');
+  document.getElementById('btn-opciones').textContent = t('opciones');
+  document.getElementById('txt-tit-opciones').textContent = t('tit_opciones');
+  document.getElementById('txt-idioma-label').textContent = t('idioma');
+  document.getElementById('txt-sonido-label').textContent = t('sonido');
+  document.getElementById('txt-opciones-explicacion').textContent = t('texto_opciones');
+  document.getElementById('cerrar-opciones').textContent = t('cerrar');
+  document.getElementById('btn-sonido').textContent = sonidoActivado ? t('sonido_on') : t('sonido_off');
+  document.querySelectorAll('.btn-idioma').forEach((boton) => {
+    boton.classList.toggle('activo', boton.dataset.idioma === idiomaActual);
+  });
+  if (subtituloGlobal) subtituloGlobal.setText(NOMBRES_MUNDO[mundoActual] + t('y_mas_alla'));
+}
+
+let eventoHojas = null;
+
+function configurarEventoAmbiental(escena, mundo) {
+  let temporizadorQuietud = null;
+
+  const reiniciarQuietud = () => {
+    if (temporizadorQuietud) clearTimeout(temporizadorQuietud);
+    pararEventoAmbiental();
+    temporizadorQuietud = setTimeout(() => iniciarEventoAmbiental(escena, mundo), 6000);
+  };
+
+  window.addEventListener('pointerdown', reiniciarQuietud);
+  window.addEventListener('keydown', reiniciarQuietud);
+  reiniciarQuietud();
+}
+
+function iniciarEventoAmbiental(escena, mundo) {
+  if (mundo === 1) {
+    eventoHojas = escena.time.addEvent({
+      delay: 1200, loop: true,
+      callback: () => crearHojaCayendo(escena)
+    });
+  }
+  // los demas mundos tendran su propio efecto cuando los construyamos
+}
+
+function pararEventoAmbiental() {
+  if (eventoHojas) { eventoHojas.remove(); eventoHojas = null; }
+}
+
+function crearHojaCayendo(escena) {
+  if (arbolesX.length === 0) return;
+  const x = arbolesX[Math.floor(Math.random() * arbolesX.length)] + (Math.random() * 20 - 10);
+  const hoja = escena.add.image(x, 335, 'hoja');
+  const destinoX = x + (Math.random() * 60 - 30);
+  escena.tweens.add({
+    targets: hoja, x: destinoX, y: 394, angle: 200 + Math.random() * 200,
+    duration: 2200 + Math.random() * 1200, ease: 'Sine.easeIn',
+    onComplete: () => hoja.destroy()
+  });
+}
+</script>
+</body>
+</html>
